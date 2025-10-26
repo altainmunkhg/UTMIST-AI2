@@ -387,10 +387,10 @@ class SelfPlayHandler(ABC):
             try:
                 opponent = self.agent_partial(file_path=path)
             except FileNotFoundError:
-                print(f"Warning: Self-play file {path} not found. Defaulting to constant agent.")
+                #print(f"Warning: Self-play file {path} not found. Defaulting to constant agent.")
                 opponent = ConstantAgent()
         else:
-            print("Warning: No self-play model saved. Defaulting to constant agent.")
+            #print("Warning: No self-play model saved. Defaulting to constant agent.")
             opponent = ConstantAgent()
         opponent.get_env_info(self.env)
         return opponent
@@ -453,7 +453,7 @@ class OpponentsCfg():
         )[0]
 
         # If self-play is selected, return the trained model
-        print(f'Selected {agent_name}')
+        #print(f'Selected {agent_name}')
         if agent_name == "self_play":
             selfplay_handler: SelfPlayHandler = self.opponents[agent_name][1]
             return selfplay_handler.get_opponent()
