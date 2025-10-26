@@ -576,6 +576,7 @@ if __name__ == '__main__':
 
     # Start here if you want to train from a specific timestep. e.g:
     #my_agent = RecurrentPPOAgent(file_path='checkpoints/experiment_3/rl_model_120006_steps.zip')
+    my_agent = RecurrentPPOAgent()
 
     # Reward manager
     reward_manager = gen_reward_manager()
