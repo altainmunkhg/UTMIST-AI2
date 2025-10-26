@@ -767,6 +767,8 @@ def run_match(
 
         if video_path is not None:
             img = env.render()
+            img = np.rot90(img, k=-1)  # video output rotate fix
+            img = np.fliplr(img)  # Mirror/flip the image horizontally
             writer.writeFrame(img)
             del img
 
