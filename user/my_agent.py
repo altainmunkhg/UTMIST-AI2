@@ -1,12 +1,12 @@
 # # SUBMISSION: Agent
 # This will be the Agent class we run in the 1v1. We've started you off with a functioning RL agent (`SB3Agent(Agent)`) and if-statement agent (`BasedAgent(Agent)`). Feel free to copy either to `SubmittedAgent(Agent)` then begin modifying.
-# 
+#
 # Requirements:
 # - Your submission **MUST** be of type `SubmittedAgent(Agent)`
 # - Any instantiated classes **MUST** be defined within and below this code block.
-# 
+#
 # Remember, your agent can be either machine learning, OR if-statement based. I've seen many successful agents arising purely from if-statements - give them a shot as well, if ML is too complicated at first!!
-# 
+#
 # Also PLEASE ask us questions in the Discord server if any of the API is confusing. We'd be more than happy to clarify and get the team on the right track.
 # Requirements:
 # - **DO NOT** import any modules beyond the following code block. They will not be parsed and may cause your submission to fail validation.
@@ -18,13 +18,15 @@ import os
 import gdown
 from typing import Optional
 from environment.agent import Agent
-from stable_baselines3 import PPO, A2C # Sample RL Algo imports
-from sb3_contrib import RecurrentPPO # Importing an LSTM
+from stable_baselines3 import PPO, A2C  # Sample RL Algo imports
+from sb3_contrib import RecurrentPPO  # Importing an LSTM
+
 
 class SubmittedAgent(Agent):
-    '''
+    """
     Input the **file_path** to your agent here for submission!
-    '''
+    """
+
     def __init__(
         self,
         file_path: Optional[str] = None,

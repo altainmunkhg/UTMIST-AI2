@@ -38,10 +38,9 @@ class Participant:
 
     def __init__(self, competitor=None):
         self.competitor = competitor
-        
 
     def __repr__(self) -> str:
-        return f'<Participant {self.competitor}>'
+        return f"<Participant {self.competitor}>"
 
     def get_competitor(self):
         """
@@ -57,12 +56,14 @@ class Participant:
         """
         self.competitor = competitor
 
-  class Match:
+
+class Match:
     """
     A match represents a single match in a tournament, between 2 participants.
     It adds empty participants as placeholders for the winner and loser,
     so they can be accessed as individual object pointers.
     """
+
     def __init__(self, left_participant, right_participant):
         self.__left_participant = left_participant
         self.__right_participant = right_participant
@@ -74,9 +75,7 @@ class Participant:
         right = self.__right_participant
         winner = self.__winner
         loser = self.__loser
-        return (
-            f'<Match left={left} right={right} winner={winner} loser={loser}>'
-        )
+        return f"<Match left={left} right={right} winner={winner} loser={loser}>"
 
     def set_winner(self, competitor):
         """
@@ -132,11 +131,14 @@ class Tournament:
     skilled and the last being the least. They can also be randomized before creating the instance.
     Optional options dict fields:
     """
+
     def __init__(self, competitors_list, bracket_reset_finals=True):
         assert len(competitors_list) > 1
         self.__matches = []
         self.__bracket_reset_finals = bracket_reset_finals
-        next_higher_power_of_two = int(math.pow(2, math.ceil(math.log2(len(competitors_list)))))
+        next_higher_power_of_two = int(
+            math.pow(2, math.ceil(math.log2(len(competitors_list))))
+        )
 
         winners_number_of_byes = next_higher_power_of_two - len(competitors_list)
 
@@ -148,7 +150,7 @@ class Tournament:
         losers_by_round = []
         while len(incoming_participants) > 1:
             losers = []
-            half_length = int(len(incoming_participants)/2)
+            half_length = int(len(incoming_participants) / 2)
             first = incoming_participants[0:half_length]
             last = incoming_participants[half_length:]
             last.reverse()
@@ -190,10 +192,12 @@ class Tournament:
             incoming_participants = losers
 
             if len(incoming_participants) > 1:
-                next_higher_power_of_two = int(math.pow(2, math.ceil(math.log2(len(incoming_participants)))))
+                next_higher_power_of_two = int(
+                    math.pow(2, math.ceil(math.log2(len(incoming_participants))))
+                )
                 number_of_byes = next_higher_power_of_two - len(incoming_participants)
                 incoming_participants.extend([None] * number_of_byes)
-                half_length = math.ceil(len(incoming_participants)/2)
+                half_length = math.ceil(len(incoming_participants) / 2)
                 first = incoming_participants[0:half_length]
                 last = incoming_participants[half_length:]
                 last.reverse()
@@ -209,11 +213,11 @@ class Tournament:
                         incoming_participants.append(match.get_winner_participant())
                         self.__matches.append(match)
                 if len(incoming_participants) > 0:
-                    if len(losers_by_round) <= index + 1:       
+                    if len(losers_by_round) <= index + 1:
                         losers_by_round.append(incoming_participants)
                     else:
                         losers_by_round[index + 1].extend(incoming_participants)
-            
+
             elif len(losers_by_round) > index + 1:
                 losers_by_round[index + 1].extend(incoming_participants)
 
@@ -225,9 +229,12 @@ class Tournament:
         finals_match = Match(last_winner, last_loser)
         self.__matches.append(finals_match)
         self.__finals_match = finals_match
-        
+
         if bracket_reset_finals:
-            bracket_reset_finals_match = Match(finals_match.get_winner_participant(), finals_match.get_loser_participant())
+            bracket_reset_finals_match = Match(
+                finals_match.get_winner_participant(),
+                finals_match.get_loser_participant(),
+            )
             self.__matches.append(bracket_reset_finals_match)
 
             self.__winner = bracket_reset_finals_match.get_winner_participant()
@@ -241,7 +248,7 @@ class Tournament:
     def __repr__(self) -> str:
         winner = self.__winner
         num_matches = len(self.__matches)
-        return f'<Tournament winner={winner} num_matches={num_matches}>'
+        return f"<Tournament winner={winner} num_matches={num_matches}>"
 
     def get_active_matches(self):
         """
@@ -263,7 +270,9 @@ class Tournament:
         """
         matches = []
         for match in self.get_active_matches():
-            competitors = [participant.get_competitor() for participant in match.get_participants()]
+            competitors = [
+                participant.get_competitor() for participant in match.get_participants()
+            ]
             if competitor in competitors:
                 matches.append(match)
         return matches
@@ -287,6 +296,11 @@ class Tournament:
             bracket_reset = self.__bracket_reset_finals_match
             if finals.get_winner_participant().get_competitor() is not None:
                 if bracket_reset.get_winner_participant().get_competitor() is None:
-                    if finals.get_winner_participant().get_competitor() is finals.get_participants()[0].get_competitor():
-                        self.add_win(bracket_reset, finals.get_winner_participant().get_competitor())
-
+                    if (
+                        finals.get_winner_participant().get_competitor()
+                        is finals.get_participants()[0].get_competitor()
+                    ):
+                        self.add_win(
+                            bracket_reset,
+                            finals.get_winner_participant().get_competitor(),
+                        )

@@ -1,9 +1,9 @@
-import pytest 
+import pytest
 from loguru import logger
 import importlib.util
 import os
 import sys
-from environment.agent import run_match , CameraResolution , gen_reward_manager
+from environment.agent import run_match, CameraResolution, gen_reward_manager
 from user.utils import get_participant_elo, update_participant_elo, elo_update
 
 
@@ -23,18 +23,23 @@ def load_agent_class(file_path):
 
     # Expecting a class named SubmittedAgent in the file
     if not hasattr(module, "SubmittedAgent"):
-        raise AttributeError(f"File {file_path} does not define a SubmittedAgent class.")
+        raise AttributeError(
+            f"File {file_path} does not define a SubmittedAgent class."
+        )
 
     return module.SubmittedAgent
 
-@pytest.mark.timeout(300) 
+
+@pytest.mark.timeout(300)
 def test_agent_batte():
     # Get paths to the agents
     logger.info(f"Loading agents: ")
     agent_1_path = os.getenv("AGENT1_PATH")
     agent_2_path = os.getenv("AGENT2_PATH")
 
-    assert agent_1_path is not None and agent_2_path is not None, "Could not find path to agents"
+    assert (
+        agent_1_path is not None and agent_2_path is not None
+    ), "Could not find path to agents"
 
     agent1_username = agent_1_path.split("/")[-2]
     agent2_username = agent_2_path.split("/")[-2]
@@ -52,21 +57,23 @@ def test_agent_batte():
     match_time = 90
     logger.info("✅ Both agents successfully instantiated.")
     logger.info(f"{agent1_username} vs {agent2_username}")
-    match_result = run_match(agent1_instance,
-            agent_2=agent2_instance,
-            video_path=f'battle.mp4',
-            agent_1_name='Agent 1',
-            agent_2_name='Agent 2',
-            resolution=CameraResolution.LOW,
-            reward_manager=reward_manager,
-            max_timesteps=30 * match_time,
-            train_mode=True
-            )
+    match_result = run_match(
+        agent1_instance,
+        agent_2=agent2_instance,
+        video_path=f"battle.mp4",
+        agent_1_name="Agent 1",
+        agent_2_name="Agent 2",
+        resolution=CameraResolution.LOW,
+        reward_manager=reward_manager,
+        max_timesteps=30 * match_time,
+        train_mode=True,
+    )
 
-    new_elo1, new_elo2 = elo_update(agent1_elo, agent2_elo, match_result.player1_result.value)
+    new_elo1, new_elo2 = elo_update(
+        agent1_elo, agent2_elo, match_result.player1_result.value
+    )
     update_participant_elo(agent1_username, new_elo1)
     update_participant_elo(agent2_username, new_elo2)
 
     logger.info("Battle has completed successfully!")
     logger.info(f"{agent1_username} vs {agent2_username} - {match_result}")
-

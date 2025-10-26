@@ -24,5 +24,3 @@ except Exception:
     server_mod.api = api_mod  # type: ignore[attr-defined]
     sys.modules["server"] = server_mod
     sys.modules["server.api"] = api_mod
-
-

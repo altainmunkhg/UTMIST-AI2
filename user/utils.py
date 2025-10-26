@@ -2,6 +2,7 @@ import os
 from typing import Optional
 from supabase import create_client
 
+
 def elo_update(elo1, elo2, result, k=32):
     """
     Update two ELO scores based on result.
@@ -25,16 +26,27 @@ def get_participant_elo(username: str) -> int:
     url = os.environ["SUPABASE_URL"]
     key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     if not key:
-        raise RuntimeError("Missing Supabase key in environment (SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY)")
+        raise RuntimeError(
+            "Missing Supabase key in environment (SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY)"
+        )
 
     client = create_client(url, key)
 
-    resp = client.table("ai2_leaderboard").select("elo").eq("username", username).single().execute()
+    resp = (
+        client.table("ai2_leaderboard")
+        .select("elo")
+        .eq("username", username)
+        .single()
+        .execute()
+    )
     if getattr(resp, "data", None) and "elo" in resp.data:
         return resp.data["elo"]
     raise ValueError(f"No ELO found for user: {username}")
 
-def update_participant_elo(username: str, elo: int, match_result: Optional[str] = None) -> None:
+
+def update_participant_elo(
+    username: str, elo: int, match_result: Optional[str] = None
+) -> None:
     """Update ELO for a participant in the ai2_leaderboard table.
 
     match_result is accepted for compatibility but not used here.
@@ -42,9 +54,13 @@ def update_participant_elo(username: str, elo: int, match_result: Optional[str] 
     url = os.environ["SUPABASE_URL"]
     key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
     client = create_client(url, key)
-    resp = client.table("ai2_leaderboard").update({"elo": elo}).eq("username", username).execute()
+    resp = (
+        client.table("ai2_leaderboard")
+        .update({"elo": elo})
+        .eq("username", username)
+        .execute()
+    )
 
     if hasattr(resp, "error") and resp.error:
         # supabase-py may return error object/message
         raise RuntimeError(str(resp.error))
-     

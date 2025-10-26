@@ -5,7 +5,12 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
 
     BRAWL_TO_UNITS = 1.024 / 320  # Conversion factor
 
-    def __init__(self, mode: RenderMode=RenderMode.RGB_ARRAY, resolution: CameraResolution=CameraResolution.LOW, train_mode: bool = False):
+    def __init__(
+        self,
+        mode: RenderMode = RenderMode.RGB_ARRAY,
+        resolution: CameraResolution = CameraResolution.LOW,
+        train_mode: bool = False,
+    ):
         super(WarehouseBrawl, self).__init__()
 
         self.stage_width_tiles: float = 29.8
@@ -16,16 +21,16 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
         self.resolution = resolution
         self.train_mode = train_mode
 
-        self.agents = [0, 1] # Agent 0, agent 1
-        self.logger = ['', '']
+        self.agents = [0, 1]  # Agent 0, agent 1
+        self.logger = ["", ""]
 
         # Params
         self.fps = 30
         self.dt = 1 / self.fps
         self.max_timesteps = self.fps * 90
 
-        self.agent_1_name = 'Team 1'
-        self.agent_2_name = 'Team 2'
+        self.agent_1_name = "Team 1"
+        self.agent_2_name = "Team 2"
 
         # Signals
         self.knockout_signal = Signal(self)
@@ -76,16 +81,16 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
         # )
 
         obs_helper = ObsHelper()
-        self.add_player_obs(obs_helper, 'player')
-        self.add_player_obs(obs_helper, 'opponent')
+        self.add_player_obs(obs_helper, "player")
+        self.add_player_obs(obs_helper, "opponent")
 
-        print('Obs space', obs_helper.low, obs_helper.high)
+        print("Obs space", obs_helper.low, obs_helper.high)
 
         self.obs_helper = obs_helper
 
         return self.obs_helper.get_as_box()
 
-    def add_player_obs(self, obs_helper, name: str='player') -> None:
+    def add_player_obs(self, obs_helper, name: str = "player") -> None:
         # Note: Some low and high bounds are off here. To ensure everyone's code
         # still works, we are not modifying them, but will elaborate in comments.
         # Pos: Unnormalized, goes from [-18, -7], [18, 7], in game units
@@ -111,18 +116,18 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
 
     def get_action_space(self):
         act_helper = ActHelper()
-        act_helper.add_key("w") # W (Aim up)
-        act_helper.add_key("a") # A (Left)
-        act_helper.add_key("s") # S (Aim down/fastfall)
-        act_helper.add_key("d") # D (Right)
-        act_helper.add_key("space") # Space (Jump)
-        act_helper.add_key("h") # H (Pickup/Throw)
-        act_helper.add_key("l") # L (Dash/Dodge)
-        act_helper.add_key("j") # J (Light Attack)
-        act_helper.add_key("k") # K (Heavy Attack)
-        act_helper.add_key("g") # G (Taunt)
+        act_helper.add_key("w")  # W (Aim up)
+        act_helper.add_key("a")  # A (Left)
+        act_helper.add_key("s")  # S (Aim down/fastfall)
+        act_helper.add_key("d")  # D (Right)
+        act_helper.add_key("space")  # Space (Jump)
+        act_helper.add_key("h")  # H (Pickup/Throw)
+        act_helper.add_key("l")  # L (Dash/Dodge)
+        act_helper.add_key("j")  # J (Light Attack)
+        act_helper.add_key("k")  # K (Heavy Attack)
+        act_helper.add_key("g")  # G (Taunt)
 
-        print('Action space', act_helper.low, act_helper.high)
+        print("Action space", act_helper.low, act_helper.high)
 
         self.act_helper = act_helper
 
@@ -146,41 +151,42 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
         return PlayerStats(
             damage_taken=player.damage_taken_total,
             damage_done=player.damage_done,
-            lives_left=player.stocks)
+            lives_left=player.stocks,
+        )
 
     def load_attacks(self):
         # load all from /content/attacks
         self.attacks = {}
 
         self.keys = {
-            'Unarmed NLight': MoveType.NLIGHT,
-            'Unarmed DLight': MoveType.DLIGHT,
-            'Unarmed SLight': MoveType.SLIGHT,
-            'Unarmed NSig':   MoveType.NSIG,
-            'Unarmed DSig':   MoveType.DSIG,
-            'Unarmed SSig':   MoveType.SSIG,
-            'Unarmed NAir':   MoveType.NAIR,
-            'Unarmed DAir':   MoveType.DAIR,
-            'Unarmed SAir':   MoveType.SAIR,
-            'Unarmed Recovery': MoveType.RECOVERY,
-            'Unarmed Groundpound': MoveType.GROUNDPOUND,
+            "Unarmed NLight": MoveType.NLIGHT,
+            "Unarmed DLight": MoveType.DLIGHT,
+            "Unarmed SLight": MoveType.SLIGHT,
+            "Unarmed NSig": MoveType.NSIG,
+            "Unarmed DSig": MoveType.DSIG,
+            "Unarmed SSig": MoveType.SSIG,
+            "Unarmed NAir": MoveType.NAIR,
+            "Unarmed DAir": MoveType.DAIR,
+            "Unarmed SAir": MoveType.SAIR,
+            "Unarmed Recovery": MoveType.RECOVERY,
+            "Unarmed Groundpound": MoveType.GROUNDPOUND,
         }
 
-        for file in sorted(os.listdir('attacks')):
-            name = file.split('.')[0]
-            if name not in self.keys.keys(): continue
-            with open(os.path.join('attacks', file)) as f:
+        for file in sorted(os.listdir("attacks")):
+            name = file.split(".")[0]
+            if name not in self.keys.keys():
+                continue
+            with open(os.path.join("attacks", file)) as f:
                 move_data = json.load(f)
 
             self.attacks[self.keys[name]] = move_data
-
 
     def step(self, action: dict[int, np.ndarray]):
         # Create new rewards dict
         self.cur_action = action
         self.rewards = {agent: 0 for agent in self.agents}
         self.terminated = False
-        self.logger = ['', '']
+        self.logger = ["", ""]
 
         self.camera.process()
 
@@ -202,12 +208,10 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
             player.process(action[agent])
             if player.stocks <= 0:
                 self.terminated = True
-                self.win_signal.emit(agent='player' if agent == 1 else 'opponent')
+                self.win_signal.emit(agent="player" if agent == 1 else "opponent")
             if player.on_platform is not None:
                 platform_vel = player.on_platform.velocity
                 player.body.velocity += pymunk.Vec2d(platform_vel.x, platform_vel.y)
-            
-
 
         # Process physics info
         for obj_name, obj in self.objects.items():
@@ -230,9 +234,6 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
 
     def reset(self, seed=None) -> Tuple[dict[int, np.ndarray], dict[str, Any]]:
         self.seed = seed
-
-
-
 
         self.space = pymunk.Space()
         self.dt = 1 / 30.0
@@ -260,10 +261,10 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
 
         obs = []
         obs += self.players[agent].get_obs()
-        obs += self.players[1-agent].get_obs()
-        #obs += self.players[agent].body.position.x, self.players[agent].body.position.y
-        #obs += self.players[agent].body.position.x, self.players[agent].body.position.y
-        #obs += self.players[agent].body.velocity.x, self.players[agent].body.velocity.y
+        obs += self.players[1 - agent].get_obs()
+        # obs += self.players[agent].body.position.x, self.players[agent].body.position.y
+        # obs += self.players[agent].body.position.x, self.players[agent].body.position.y
+        # obs += self.players[agent].body.velocity.x, self.players[agent].body.velocity.y
 
         return np.array(obs)
 
@@ -285,35 +286,61 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
 
         # Smaller text
         small_font = pygame.font.Font(None, 30)
-        text_surface = small_font.render(f"Time: {self.steps}", True, (255, 255, 255))  # White text
-        text_rect = text_surface.get_rect(center=(self.camera.window_width // 2, 30))  # Center the text
+        text_surface = small_font.render(
+            f"Time: {self.steps}", True, (255, 255, 255)
+        )  # White text
+        text_rect = text_surface.get_rect(
+            center=(self.camera.window_width // 2, 30)
+        )  # Center the text
         canvas.blit(text_surface, text_rect)
 
         # Smaller text
         small_font = pygame.font.Font(None, 20)
-        text_surface = small_font.render(f"P1: {self.logger[0]['transition']}, P2: {self.logger[1]['transition']}", True, (255, 255, 255))  # White text
-        text_rect = text_surface.get_rect(center=(self.camera.window_width // 2, 50))  # Center the text
+        text_surface = small_font.render(
+            f"P1: {self.logger[0]['transition']}, P2: {self.logger[1]['transition']}",
+            True,
+            (255, 255, 255),
+        )  # White text
+        text_rect = text_surface.get_rect(
+            center=(self.camera.window_width // 2, 50)
+        )  # Center the text
         canvas.blit(text_surface, text_rect)
 
         # Smaller text
         small_font = pygame.font.Font(None, 20)
-        text_surface = small_font.render(f"P1: {self.logger[0].get('move_type', '')}, P2: {self.logger[1].get('move_type', '')}", True, (255, 255, 255))  # White text
-        text_rect = text_surface.get_rect(center=(self.camera.window_width // 2, 70))  # Center the text
+        text_surface = small_font.render(
+            f"P1: {self.logger[0].get('move_type', '')}, P2: {self.logger[1].get('move_type', '')}",
+            True,
+            (255, 255, 255),
+        )  # White text
+        text_rect = text_surface.get_rect(
+            center=(self.camera.window_width // 2, 70)
+        )  # Center the text
         canvas.blit(text_surface, text_rect)
 
         # Smaller text
-        text_surface = small_font.render(f"P1 Total Reward: {self.logger[0].get('total_reward', '')}, Reward {self.logger[0].get('reward', '')}", True, (255, 255, 255))  # White text
-        text_rect = text_surface.get_rect(center=(0, self.camera.window_height - 40))  # Center the text
+        text_surface = small_font.render(
+            f"P1 Total Reward: {self.logger[0].get('total_reward', '')}, Reward {self.logger[0].get('reward', '')}",
+            True,
+            (255, 255, 255),
+        )  # White text
+        text_rect = text_surface.get_rect(
+            center=(0, self.camera.window_height - 40)
+        )  # Center the text
         # make it left
         text_rect.left = 0
         canvas.blit(text_surface, text_rect)
 
-        text_surface = small_font.render(f"P2 Total Reward: {self.logger[1].get('total_reward', '')}, Reward {self.logger[1].get('reward', '')}", True, (255, 255, 255))  # White text
-        text_rect = text_surface.get_rect(center=(0, self.camera.window_height - 20))  # Center the text
+        text_surface = small_font.render(
+            f"P2 Total Reward: {self.logger[1].get('total_reward', '')}, Reward {self.logger[1].get('reward', '')}",
+            True,
+            (255, 255, 255),
+        )  # White text
+        text_rect = text_surface.get_rect(
+            center=(0, self.camera.window_height - 20)
+        )  # Center the text
         text_rect.left = 0
         canvas.blit(text_surface, text_rect)
-
-
 
     def observation_space(self, agent: AgentID) -> gymnasium.spaces.Space:
         return self.observation_spaces[agent]
@@ -323,8 +350,7 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
 
     def close(self) -> None:
         self.camera.close()
-   
-   
+
     def pre_solve_oneway(self, arbiter, space, data):
         player_shape, platform_shape = arbiter.shapes
         player = player_shape.owner
@@ -341,49 +367,49 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
                 player.on_platform = None
                 return False
 
-        player.on_platform = platform_shape.body if hasattr(platform_shape, "body") else None
+        player.on_platform = (
+            platform_shape.body if hasattr(platform_shape, "body") else None
+        )
         return True
-
 
     def separate_player_platform(self, arbiter, space, data):
         player_shape, platform_shape = arbiter.shapes
         player = player_shape.owner
         player.on_platform = None
 
-
     def _setup(self):
         # Collsion fix
-        handler = self.space.add_collision_handler(PLAYER, 
-                                                   PLAYER + 1)  # (Player1 collision_type, Player2 collision_type)
+        handler = self.space.add_collision_handler(
+            PLAYER, PLAYER + 1
+        )  # (Player1 collision_type, Player2 collision_type)
         handler.begin = lambda *args, **kwargs: False
-
 
         for player_Num in range(2):
             for platform_Num in range(1, self.number_of_platforms + 1):
-                handler = self.space.add_collision_handler(PLAYER + player_Num, PLATFORM + platform_Num)
+                handler = self.space.add_collision_handler(
+                    PLAYER + player_Num, PLATFORM + platform_Num
+                )
                 handler.pre_solve = self.pre_solve_oneway
                 handler.separate = self.separate_player_platform
-    
+
         # Environment
         ground = Ground(self.space, 0, 2.03, 10.67)
-        self.objects['ground'] = ground
-        
-        
+        self.objects["ground"] = ground
+
         stage1 = Stage(self.space, 1, 4, 2, 2, 2)
-        self.objects['stage1'] = stage1
+        self.objects["stage1"] = stage1
         # State the waypoint positions for this platform.
         # Note that in our case the y axis increases DOWNWARDS, NOT UPWARD
-        stage1.waypoint1 = (0,1)
-        stage1.waypoint2 = (0,1)
+        stage1.waypoint1 = (0, 1)
+        stage1.waypoint2 = (0, 1)
 
         stage2 = Stage(self.space, 2, 4, 2, 2, 2)
-        self.objects['stage2'] = stage2
+        self.objects["stage2"] = stage2
         # State the waypoint positions for this platform.
         # Note that in our case the y axis increases DOWNWARDS, NOT UPWARD
-        stage2.waypoint1 = (-4,-1)
-        stage2.waypoint2 = (4,-1)
-        
-        
+        stage2.waypoint1 = (-4, -1)
+        stage2.waypoint2 = (4, -1)
+
         # Players
         # randomize start pos, binary
         p1_right = bool(random.getrandbits(1))
@@ -404,8 +430,7 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
         p1 = Player(self, 0, start_position=p1_start_pos, color=[0, 0, 255, 255])
         p2 = Player(self, 1, start_position=p2_start_pos, color=[0, 255, 0, 255])
 
-        self.objects['player'] = p1
-        self.objects['opponent'] = p2
+        self.objects["player"] = p1
+        self.objects["opponent"] = p2
 
         self.players += [p1, p2]
-

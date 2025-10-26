@@ -19,6 +19,7 @@ Check out these ttnn tutorials here for how to get started with using ttnn APIs:
 - ...
 """
 
+
 class MLPPolicy(nn.Module):
     def __init__(self, obs_dim, action_dim, hidden_dim=64):
         """
@@ -65,9 +66,21 @@ class TTMLPPolicy:
             layout=ttnn.TILE_LAYOUT,
         )
 
-        self.fc1_b = ttnn.from_torch(state_dict["fc1.bias"], device=mesh_device, memory_config=ttnn.DRAM_MEMORY_CONFIG)
-        self.fc2_b = ttnn.from_torch(state_dict["fc2.bias"], device=mesh_device, memory_config=ttnn.DRAM_MEMORY_CONFIG)
-        self.fc3_b = ttnn.from_torch(state_dict["fc3.bias"], device=mesh_device, memory_config=ttnn.DRAM_MEMORY_CONFIG)
+        self.fc1_b = ttnn.from_torch(
+            state_dict["fc1.bias"],
+            device=mesh_device,
+            memory_config=ttnn.DRAM_MEMORY_CONFIG,
+        )
+        self.fc2_b = ttnn.from_torch(
+            state_dict["fc2.bias"],
+            device=mesh_device,
+            memory_config=ttnn.DRAM_MEMORY_CONFIG,
+        )
+        self.fc3_b = ttnn.from_torch(
+            state_dict["fc3.bias"],
+            device=mesh_device,
+            memory_config=ttnn.DRAM_MEMORY_CONFIG,
+        )
 
     def __call__(self, obs: ttnn.Tensor) -> ttnn.Tensor:
         x1 = ttnn.linear(obs, self.fc1, bias=self.fc1_b, activation="relu")
@@ -83,13 +96,13 @@ class TTMLPPolicy:
 
 
 def test_mlp_policy():
-    
+
     # Open the device (since we are only using single devices N150 cards, your mesh shape will be 1x1)
-    mesh_device = ttnn.open_mesh_device(ttnn.MeshShape(1,1))
-    
+    mesh_device = ttnn.open_mesh_device(ttnn.MeshShape(1, 1))
+
     # Dimensions based on our custom RL environment
     batch_size = 1
-    action_dim = 10 
+    action_dim = 10
     hidden_dim = 64
     obs_dim = 64
 
@@ -109,6 +122,4 @@ def test_mlp_policy():
     # Run forward pass
     y = policy(x)
     tt_y = tt_policy(tt_x)
-    tt_y = ttnn.to_torch(tt_y)  
-
-    
+    tt_y = ttnn.to_torch(tt_y)
