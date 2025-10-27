@@ -1029,19 +1029,20 @@ class RecurrentPPOAgent(Agent):
         if self.file_path is None:
             policy_kwargs = {
                 "activation_fn": nn.ReLU,
-                "lstm_hidden_size": 512,
+                "lstm_hidden_size": 128,
                 "net_arch": [dict(pi=[32, 32], vf=[32, 32])],
                 "shared_lstm": True,
                 "enable_critic_lstm": False,
                 "share_features_extractor": True,
+                "log_std_init": -2,
             }
             self.model = RecurrentPPO(
                 "MlpLstmPolicy",
                 self.env,
                 verbose=0,
-                n_steps=30 * 90 * 20,
-                batch_size=16,
-                ent_coef=0.05,
+                n_steps=30 * 90 * 3,
+                batch_size=32,
+                ent_coef=0.01,
                 policy_kwargs=policy_kwargs,
             )
             del self.env
