@@ -43,7 +43,7 @@ class SB3Agent(Agent):
 
     def __init__(
         self,
-        sb3_class: Optional[Type[BaseAlgorithm]] = PPO,
+        sb3_class: Optional[Type[BaseAlgorithm]] = RecurrentPPO,
         file_path: Optional[str] = None,
     ):
         self.sb3_class = sb3_class
@@ -56,7 +56,7 @@ class SB3Agent(Agent):
                 self.env,
                 verbose=2,
                 n_steps=30 * 90 * 3,
-                batch_size=256,
+                batch_size=128,
                 ent_coef=0.01,
             )
             del self.env
@@ -101,7 +101,7 @@ class RecurrentPPOAgent(Agent):
         if self.file_path is None:
             policy_kwargs = {
                 "activation_fn": nn.ReLU,
-                "lstm_hidden_size": 512,
+                "lstm_hidden_size": 128,
                 "net_arch": [dict(pi=[32, 32], vf=[32, 32])],
                 "shared_lstm": True,
                 "enable_critic_lstm": False,
@@ -111,9 +111,9 @@ class RecurrentPPOAgent(Agent):
                 "MlpLstmPolicy",
                 self.env,
                 verbose=0,
-                n_steps=30 * 90 * 20,
-                batch_size=16,
-                ent_coef=0.05,
+                n_steps=30 * 90 * 3,
+                batch_size=64,
+                ent_coef=0.01,
                 policy_kwargs=policy_kwargs,
             )
             del self.env
@@ -407,7 +407,7 @@ class RewardMode(Enum):
 
 def damage_interaction_reward(
     env: WarehouseBrawl,
-    mode: RewardMode = RewardMode.SYMMETRIC,
+    mode: RewardMode = RewardMode.ASYMMETRIC_OFFENSIVE,
 ) -> float:
     """
     Computes the reward based on damage interactions between players.
@@ -583,44 +583,66 @@ def on_combo_reward(env: WarehouseBrawl, agent: str) -> float:
     else:
         return 1.0
 
+def facing_enemy_reward(env: WarehouseBrawl) -> float:
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+    direction_to_opponent = opponent.body.position.x - player.body.position.x
+    if (direction_to_opponent > 0 and player.facing == Facing.RIGHT) or (
+        direction_to_opponent < 0 and  player.facing == Facing.LEFT
+    ):
+        return 1.0
+    else:
+        return -1.0     
+    
+def attack_miss_reward(env: WarehouseBrawl) -> float:
+    player: Player = env.objects["player"]
+    if player.damage_taken_this_frame == 0 and isinstance(player.state, AttackState):
+        return 1.0
+    return 0.0
 
 """
 Add your dictionary of RewardFunctions here using RewTerms
 """
 
-
 def gen_reward_manager():
     reward_functions = {
-        #'target_height_reward': RewTerm(func=base_height_l2, weight=0.0, params={'target_height': -4, 'obj_name': 'player'}),
-        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight=0.5),
+        #'target_height_reward': RewTerm(func=base_height_l2, weight=0.01, params={'target_height': -4, 'obj_name': 'player'}),
+        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight = 1),
         "damage_interaction_reward": RewTerm(
-            func=damage_interaction_reward, weight=10.0
+            func=damage_interaction_reward, weight=1.0
         ),
-        #'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=0.01),
-        "head_to_opponent": RewTerm(func=head_to_opponent, weight=0.1),
+        'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=0.01),
+        "head_to_opponent": RewTerm(func=head_to_opponent, weight=0.01),
         "penalize_attack_reward": RewTerm(
             func=in_state_reward, weight=-0.1, params={"desired_state": AttackState}
         ),
-        "holding_more_than_3_keys": RewTerm(
-            func=holding_more_than_3_keys, weight=-0.05
+        'penalize_attack_miss_reward': RewTerm(
+            func=attack_miss_reward, weight=-0.1
         ),
-        #'taunt_reward': RewTerm(func=in_state_reward, weight=0.2, params={'desired_state': TauntState}),
+        "holding_more_than_3_keys": RewTerm(
+            func=holding_more_than_3_keys, weight=-0.1
+        ),
+        'taunt_reward': RewTerm(func=in_state_reward, weight=-10, params={'desired_state': TauntState}),
+        "facing_enemy_reward": RewTerm(func=facing_enemy_reward, weight=0.1),
     }
     signal_subscriptions = {
-        "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=50)),
+        "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=30)),
         "on_knockout_reward": (
             "knockout_signal",
-            RewTerm(func=on_knockout_reward, weight=8),
+            RewTerm(func=on_knockout_reward, weight=15),
         ),
-        "on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=5)),
+        
+        "on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=10)),
         "on_equip_reward": (
             "weapon_equip_signal",
-            RewTerm(func=on_equip_reward, weight=10),
+            RewTerm(func=on_equip_reward, weight=5),
         ),
         "on_drop_reward": (
             "weapon_drop_signal",
-            RewTerm(func=on_drop_reward, weight=15),
+            RewTerm(func=on_drop_reward, weight=7),
         ),
+    
+    
     }
     return RewardManager(reward_functions, signal_subscriptions)
 
@@ -634,7 +656,7 @@ The main function runs training. You can change configurations such as the Agent
 if __name__ == "__main__":
     # Create agent
     # Start here if you want to train from scratch. e.g:
-    my_agent = SB3Agent(file_path="checkpoints/SB3_PPO_2/rl_model_2008800_steps")
+    my_agent = RecurrentPPOAgent()
 
     # Start here if you want to train from a specific timestep. e.g:
     # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_324000_steps")
@@ -653,15 +675,15 @@ if __name__ == "__main__":
         save_freq=100_000,  # Save frequency
         max_saved=40,  # Maximum number of saved models
         save_path="checkpoints",  # Save path
-        run_name="SB3_PPO_3",  # Run name
-        mode=SaveHandlerMode.RESUME,  # Save mode, FORCE or RESUME
+        run_name="RecurrentPPO_Experiment_2",  # Run names
+        mode=SaveHandlerMode.FORCE,  # Save mode, FORCE or RESUME
     )
 
     # Set opponent settings here:
     opponent_specification = {
         "self_play": (8, selfplay_handler),
-        #'constant_agent': (0.5, partial(ConstantAgent)),
-        #'based_agent': (1.5, partial(BasedAgent)),
+        'constant_agent': (0.5, partial(ConstantAgent)),
+        'based_agent': (1.5, partial(BasedAgent)),
     }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 
