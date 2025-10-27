@@ -14,8 +14,6 @@ import pygame
 
 pygame.init()
 
-steps = 1_000_010
-
 my_agent = UserInputAgent()
 #my_agent = SubmittedAgent(file_path="checkpoints/RecurrentPPO_Experiment_3.1/rl_model_3013200_steps")
 my_agent = BasedAgent()

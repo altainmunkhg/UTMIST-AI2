@@ -137,6 +137,9 @@ class RecurrentPPOAgent(Agent):
                 self.env,
                 verbose=2,
                 n_steps=30 * 90 * 3,
+                batch_size=64,
+                verbose=2,
+                n_steps=30 * 90 * 3,
                 ent_coef=0.01,
                 n_epochs=10,
                 batch_size=128,
@@ -513,6 +516,7 @@ class RewardMode(Enum):
 
 def damage_interaction_reward(
     env: WarehouseBrawl,
+    mode: RewardMode = RewardMode.SYMMETRIC,
     mode: RewardMode = RewardMode.SYMMETRIC,
 ) -> float:
     """
