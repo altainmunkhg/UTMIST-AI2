@@ -420,12 +420,12 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
         # position of both players, so that they get used to many
         # different positions in the map!
 
-        # if self.train_mode:
-        #     p1_start_pos = [random.uniform(-5, 5), 0]
-        #     p2_start_pos = [random.uniform(-5, 5), 0]
-        # else:
-        #     p1_start_pos = [5, 0] if p1_right else [-5, 0]
-        #     p2_start_pos = [-5, 0] if p1_right else [5, 0]
+        #if self.train_mode:
+        #    p1_start_pos = [random.uniform(-5, 5), 0]
+        #    p2_start_pos = [random.uniform(-5, 5), 0]
+        #else:
+        #    p1_start_pos = [5, 0] if p1_right else [-5, 0]
+        #    p2_start_pos = [-5, 0] if p1_right else [5, 0]
 
         p1 = Player(self, 0, start_position=p1_start_pos, color=[0, 0, 255, 255])
         p2 = Player(self, 1, start_position=p2_start_pos, color=[0, 255, 0, 255])

@@ -1028,8 +1028,8 @@ class RecurrentPPOAgent(Agent):
         if self.file_path is None:
             policy_kwargs = {
                 "activation_fn": nn.ReLU,
-                "lstm_hidden_size": 128,
-                "net_arch": [dict(pi=[32, 32], vf=[32, 32])],
+                "lstm_hidden_size": 256,
+                "net_arch": [dict(pi=[128, 128], vf=[128, 128])],
                 "shared_lstm": True,
                 "enable_critic_lstm": False,
                 "share_features_extractor": True,

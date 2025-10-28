@@ -14,9 +14,10 @@ import pygame
 pygame.init()
 
 my_agent = UserInputAgent()
+#my_agent = SubmittedAgent(file_path="checkpoints/RecurrentPPO_Experiment_3.1/rl_model_3013200_steps")
 
 # Input your file path here in SubmittedAgent if you are loading a model:
-opponent = SubmittedAgent(file_path="checkpoints/RecurrentPPO_Experiment_3/rl_model_3013200_steps")
+opponent = SubmittedAgent(file_path="checkpoints/RecurrentPPO_Experiment_4/rl_model_2008800_steps")
 
 match_time = 99999
 
