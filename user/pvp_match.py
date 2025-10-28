@@ -7,6 +7,7 @@ from user.train_agent import (
     ClockworkAgent,
     SB3Agent,
     RecurrentPPOAgent,
+    CustomAgent,
 )  # add anymore custom Agents (from train_agent.py) here as needed
 from user.my_agent import SubmittedAgent
 import pygame
@@ -17,7 +18,8 @@ my_agent = UserInputAgent()
 #my_agent = SubmittedAgent(file_path="checkpoints/RecurrentPPO_Experiment_3.1/rl_model_3013200_steps")
 
 # Input your file path here in SubmittedAgent if you are loading a model:
-opponent = SubmittedAgent(file_path="checkpoints/RecurrentPPO_Experiment_4/rl_model_2008800_steps")
+#opponent = SubmittedAgent(file_path="checkpoints/Hierarch_Experiment_1_Movement/rl_model_1004400_steps")
+opponent = CustomAgent();
 
 match_time = 99999
 

@@ -53,6 +53,7 @@ class SB3Agent(Agent):
     def __init__(
         self,
         sb3_class: Optional[Type[BaseAlgorithm]] = PPO,
+        sb3_class: Optional[Type[BaseAlgorithm]] = PPO,
         file_path: Optional[str] = None,
     ):
         self.sb3_class = sb3_class
@@ -110,8 +111,8 @@ class RecurrentPPOAgent(Agent):
         if self.file_path is None:
             policy_kwargs = {
                 "activation_fn": nn.ReLU,
-                "lstm_hidden_size": 128,
-                "net_arch": [dict(pi=[128, 128], vf=[128, 128])],
+                "lstm_hidden_size": 64,
+                "net_arch": [dict(pi=[64, 64], vf=[64, 64])],
                 "shared_lstm": True,
                 "enable_critic_lstm": False,
                 "share_features_extractor": True,
@@ -337,52 +338,82 @@ class MLPExtractor(BaseFeaturesExtractor):
 
 
 class CustomAgent(Agent):
-    def __init__(
-        self,
-        sb3_class: Optional[Type[BaseAlgorithm]] = PPO,
-        file_path: str = None,
-        extractor: BaseFeaturesExtractor = None,
-    ):
-        self.sb3_class = sb3_class
-        self.extractor = extractor
+    def __init__(self, file_path: Optional[str] = None):
         super().__init__(file_path)
+        self.lstm_states = None
+        self.episode_starts = np.ones((1,), dtype=bool)
+        self.skills = {}
+        self.active_skill = None
+        self.time = 0
 
     def _initialize(self) -> None:
-        if self.file_path is None:
-            self.model = self.sb3_class(
-                "MlpPolicy",
-                self.env,
-                policy_kwargs=self.extractor.get_policy_kwargs(),
-                verbose=2,
-                n_steps=30 * 90 * 3,
-                batch_size=256,
-                ent_coef=0.01,
-            )
-            del self.env
-        else:
-            self.model = self.sb3_class.load(self.file_path)
+            #The diffrent AI for each skill
+        skills = {
+            "movement": 'checkpoints/Hierarch_Experiment_1_Movement/rl_model_1004400_steps',
+            "combat": 'checkpoints/Hierarch_Experiment_1_combatt/rl_model_1004400_steps',
+            "recovery": 'checkpoints/Hierarch_Experiment_1_recovery/rl_model_1004400_steps',
+            "default": 'checkpoints/RecurrentPPO_Experiment_3.1/rl_model_3013200_steps',
+        }
+        
+        #Go through and make sure each skill can be loaded
+        for name, path in skills.items():
+            try:
+                self.skills[name] = RecurrentPPO.load(path)
+                print(f"AI Loaded skill: {name} from {path}")
+            except Exception as e:
+                print(f"AI Could not load {name}: {e}")
 
-    def _gdown(self) -> str:
-        # Call gdown to your link
-        return
+        #If no skills loaded, load a default one
+        if not self.skills:
+            print("No skills loaded, using default.")
+            self.skills["default"] = RecurrentPPO.load('checkpoints/RecurrentPPO_Experiment_3.1/rl_model_3013200_steps')
 
-    # def set_ignore_grad(self) -> None:
-    # self.model.set_ignore_act_grad(True)
+        self.active_skill = self.skills.get("movement", list(self.skills.values())[0])
 
     def predict(self, obs):
-        action, _ = self.model.predict(obs)
+        self.time += 1
+        pos = self.obs_helper.get_section(obs, "player_pos")
+        opp_pos = self.obs_helper.get_section(obs, "opponent_pos")
+        opp_KO = self.obs_helper.get_section(obs, "opponent_state") in [5, 11]
+        action = self.act_helper.zeros()
+        skill_name = "default"
+
+        # If off the edge, come back
+        if (pos[0] < -7 or (pos[0] > -2 and pos[0] < 2) or pos[0] > 7) or (pos[1] > 3.5):
+            #if skill_name != "recovery":
+            #    print("Switching to recovery skill")
+            skill_name = "recovery"
+        elif not opp_KO:
+            # Head toward opponent
+            #if skill_name != "movement":
+            #    print("Switching to movement skill")
+            if opp_pos[0] > pos[0]:
+                skill_name = "movement"
+
+        # Attack if near
+        if (pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 4.0:
+            #if skill_name != "combat":
+            #    print(f"Switching to combat skill")
+            skill_name = "combat"
+
+        # Switch to the selected skill
+        if skill_name in self.skills:
+            self.active_skill = self.skills[skill_name]
+        else:
+            print(f"Skill '{skill_name}' not loaded, using fallback.")
+            self.active_skill = self.skills["default"]
+
+        #predict using the active skill
+        action, self.lstm_states = self.active_skill.predict(
+            obs,
+            state=self.lstm_states,
+            episode_start=self.episode_starts,
+            deterministic=True
+        )
+
+        self.episode_starts = np.zeros((1,), dtype=bool)
         return action
 
-    def save(self, file_path: str) -> None:
-        self.model.save(file_path, include=["num_timesteps"])
-
-    def learn(self, env, total_timesteps, log_interval: int = 1, verbose=2):
-        self.model.set_env(env)
-        self.model.verbose = verbose
-        self.model.learn(
-            total_timesteps=total_timesteps,
-            log_interval=log_interval,
-        )
 
 
 # --------------------------------------------------------------------------------
@@ -655,23 +686,24 @@ Add your dictionary of RewardFunctions here using RewTerms
 
 def gen_reward_manager():
     reward_functions = {
-        #"danger_zone_reward": RewTerm(func=danger_zone_reward, weight=-5.0),
-        "damage_interaction_reward": RewTerm(func=damage_interaction_reward, weight=7.0),
+        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight=-5.0),
+        #"damage_interaction_reward": RewTerm(func=damage_interaction_reward, weight=7.0),
         #'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=-0.1),
-        #"head_to_opponent": RewTerm(func=head_to_opponent, weight = 0.05),
+        "head_to_opponent": RewTerm(func=head_to_opponent, weight = 2),
         #'penalize_attack_miss_reward': RewTerm(func=attack_miss_reward, weight=-0.1),
         #"holding_more_than_3_keys": RewTerm(func=holding_more_than_3_keys, weight=-0.25),
-        #'taunt_reward': RewTerm(func=in_state_reward, weight=-1, params={'desired_state': TauntState}),
-        #"facing_enemy_reward": RewTerm(func=facing_enemy_reward, weight=0.005),
+        'taunt_reward': RewTerm(func=in_state_reward, weight=-10, params={'desired_state': TauntState}),
+        "facing_enemy_reward": RewTerm(func=facing_enemy_reward, weight=0.005),
         #'wide_attack_reward': RewTerm(func=wide_attack_reward, weight=-0.1),
         #'sheild_when_enemy_attacks_reward': RewTerm(func=sheild_when_enemy_attacks_reward, weight=0.05),
         #'attack_while_airborne': RewTerm(func=attack_while_airborne, weight=-0.5),
         #'stay_on_ground_reward': RewTerm(func=stay_on_ground_reward, weight=-0.01),
+        'attack_reward': RewTerm(func=in_state_reward, weight=-10, params={'desired_state': AttackState}),
     }
     signal_subscriptions = {
         "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=50)),
         "on_knockout_reward": ("knockout_signal",RewTerm(func=on_knockout_reward, weight=25)),
-        "on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=10)),
+        #"on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=10)),
         #"on_equip_reward": ("weapon_equip_signal",RewTerm(func=on_equip_reward, weight=1)),
         #"on_drop_reward": ("weapon_drop_signal",RewTerm(func=on_drop_reward, weight=1.5)),
     }
@@ -687,7 +719,7 @@ The main function runs training. You can change configurations such as the Agent
 if __name__ == "__main__":
     # Create agent
     # Start here if you want to train from scratch. e.g:
-    my_agent = RecurrentPPOAgent('checkpoints/RecurrentPPO_Experiment_4/rl_model_2008800_steps')
+    my_agent = CustomAgent()
 
     # Start here if you want to train from a specific timestep. e.g:
     # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_324000_steps")
@@ -695,44 +727,45 @@ if __name__ == "__main__":
     # Reward manager
     reward_manager = gen_reward_manager()
     # Self-play settings
+  #  selfplay_handler = SelfPlayRandom(
+  #      partial(type(my_agent)),  # Agent class and its keyword arguments
+  #      # type(my_agent) = Agent class
+  #  )
     # selfplay_handler = SelfPlayRandom(
     #     partial(type(my_agent)),  # Agent class and its keyword arguments
     #     # type(my_agent) = Agent class
     # )
 
     self_play_random_manager = SelfPlayRandom(partial(type(my_agent)))
-
     self_play_latest_manager = SelfPlayLatest(partial(type(my_agent)))
 
-    # Set save settings here:
-    save_handler = SaveHandler(
-        agent=my_agent,  # Agent to save
-        save_freq=100_000,  # Save frequency
-        max_saved=40,  # Maximum number of saved models
-        save_path="checkpoints",  # Save path
-        run_name="RecurrentPPO_Experiment_4",  # Run names
-        mode=SaveHandlerMode.RESUME,  # Save mode, FORCE or RESUME
-    )
+  #  # Set save settings here:
+  #  save_handler = SaveHandler(
+  #      agent=my_agent,  # Agent to save
+ #       save_freq=100_000,  # Save frequency
+ #       max_saved=40,  # Maximum number of saved models
+ #       save_path="checkpoints",  # Save path
+ #       run_name="Hierarch_Experiment_1_Combined",  # Run names
+#        mode=SaveHandlerMode.FORCE,  # Save mode, FORCE or RESUME
+#    )
+#
+#    # Set opponent settings here:
+#    opponent_specification = {
+#        "self_play": (4, selfplay_handler),
+#        'constant_agent': (1, partial(ConstantAgent)),
+#
+    #}
+    #opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 
-    # Set opponent settings here:
-    opponent_specification = {
-        "self_play": (4, selfplay_handler),
-        'Experiment3_20k': (1, partial(RecurrentPPOAgent, file_path='checkpoints/RecurrentPPO_Experiment_3/rl_model_2008800_steps')),
-        'Experiment3_10k': (1, partial(RecurrentPPOAgent, file_path='checkpoints/RecurrentPPO_Experiment_3/rl_model_1004400_steps')),
-        'Experiment2_20k': (1, partial(RecurrentPPOAgent, file_path='checkpoints/RecurrentPPO_Experiment_2/rl_model_2008800_steps')),
-        'Experiment2_10k': (1, partial(RecurrentPPOAgent, file_path='checkpoints/RecurrentPPO_Experiment_2/rl_model_1004400_steps')),
-        'Early_Experiment_20k': (1, partial(RecurrentPPOAgent, file_path='checkpoints/experiment_2/rl_model_648000_steps')),
-        'constant_agent': (1, partial(ConstantAgent)),
+    #train(
+    #    my_agent,
+    #    reward_manager,
+    #    save_handler,
+    #    opponent_cfg,
+    #    CameraResolution.LOW,
+    #    train_timesteps=1_000_000,
+    #    train_logging=TrainLogging.PLOT,
+    #)
 
-    }
-    opponent_cfg = OpponentsCfg(opponents=opponent_specification)
-
-    train(
-        my_agent,
-        reward_manager,
-        save_handler,
-        opponent_cfg,
-        CameraResolution.LOW,
-        train_timesteps=1_000_000,
-        train_logging=TrainLogging.PLOT,
-    )
+    agent = CustomAgent()
+    agent._initialize()
