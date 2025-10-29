@@ -1,4 +1,4 @@
-from user.environment import *
+from environment.environment import *
 
 
 class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
@@ -413,8 +413,8 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
         # Players
         # randomize start pos, binary
         p1_right = bool(random.getrandbits(1))
-        p1_start_pos = [5, 0] if p1_right else [-5, 0]
-        p2_start_pos = [-5, 0] if p1_right else [5, 0]
+        p1_start_pos = [-3, 0] if p1_right else [-5, 0]
+        p2_start_pos = [-5, 0] if p1_right else [-3, 0]
 
         # Uncomment this if you'd like. It makes train_mode RANDOMIZE the
         # position of both players, so that they get used to many
