@@ -217,7 +217,6 @@ class BasedAgent(Agent):
         if (pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0:
             action = self.act_helper.press_keys(["space"], action)
 
-        # Attack if near
         if (pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 4.0:
             action = self.act_helper.press_keys(["j"], action)
 
@@ -516,7 +515,7 @@ class RewardMode(Enum):
 
 def damage_interaction_reward(
     env: WarehouseBrawl,
-    mode: RewardMode = RewardMode.SYMMETRIC ,
+    mode: RewardMode = RewardMode.SYMMETRIC,
 ) -> float:
     """
     Computes the reward based on damage interactions between players.
@@ -544,7 +543,7 @@ def damage_interaction_reward(
     if mode == RewardMode.ASYMMETRIC_OFFENSIVE:
         reward = damage_dealt
     elif mode == RewardMode.SYMMETRIC:
-        reward = damage_dealt - 0.5*damage_taken
+        reward = damage_dealt - damage_taken
     elif mode == RewardMode.ASYMMETRIC_DEFENSIVE:
         reward = -damage_taken
     else:
@@ -574,7 +573,7 @@ def danger_zone_reward(
     player: Player = env.objects["player"]
 
     # Apply penalty if the player is in the danger zone
-    reward = 1 if player.body.position.y >= zone_height else 0.0
+    reward = -zone_penalty if player.body.position.y >= zone_height else 0.0
 
     return reward
 
@@ -598,7 +597,7 @@ def in_state_reward(
     player: Player = env.objects["player"]
 
     # Apply penalty if the player is in the danger zone
-    reward = 1 if isinstance(player.state, desired_state) else -1
+    reward = 1 if isinstance(player.state, desired_state) else 0.0
 
     return reward 
 
@@ -606,6 +605,17 @@ def in_state_reward(
 def head_to_middle_reward(
     env: WarehouseBrawl,
 ) -> float:
+    """
+    Applies a penalty for every time frame player surpases a certain height threshold in the environment.
+
+    Args:
+        env (WarehouseBrawl): The game environment.
+        zone_penalty (int): The penalty applied when the player is in the danger zone.
+        zone_height (float): The height threshold defining the danger zone.
+
+    Returns:
+        float: The computed penalty as a tensor.
+    """
     # Get player object from the environment
     player: Player = env.objects["player"]
 
@@ -666,14 +676,14 @@ def on_equip_reward(env: WarehouseBrawl, agent: str) -> float:
             return 2.0
         elif env.objects["player"].weapon == "Spear":
             return 1.0
-    return -1
+    return 0.0
 
 
 def on_drop_reward(env: WarehouseBrawl, agent: str) -> float:
     if agent == "player":
         if env.objects["player"].weapon == "Punch":
             return -1.0
-    return 1
+    return 0.0
 
 
 def on_combo_reward(env: WarehouseBrawl, agent: str) -> float:

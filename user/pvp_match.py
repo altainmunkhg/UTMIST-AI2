@@ -18,8 +18,7 @@ my_agent = UserInputAgent()
 #my_agent = SubmittedAgent(file_path="checkpoints/RecurrentPPO_Experiment_3.1/rl_model_3013200_steps")
 
 # Input your file path here in SubmittedAgent if you are loading a model:
-#opponent = SubmittedAgent(file_path="checkpoints/Hierarch_Experiment_1_Movement/rl_model_1004400_steps")
-opponent = CustomAgent();
+opponent = SubmittedAgent(file_path="checkpoints/Hierarch_Experiment_1_Combat/rl_model_1000080_steps")
 
 match_time = 999999
 
