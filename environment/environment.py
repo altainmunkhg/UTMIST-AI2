@@ -1434,8 +1434,22 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
         # Players setup (rest of your existing code)
         p1_right = bool(random.getrandbits(1))
         if self.train_mode:
-            p1_start_pos = [random.uniform(-6, -3), 0]
-            p2_start_pos = [random.uniform(-6, -3), 0]
+            x1 = random.uniform(-8, 8)
+            while not (x1 < -7 or x1 > 7 or (x1 > -2 and x1 < 2)):
+                x1 = random.uniform(-8, 8)
+                y1 = random.uniform(0, -4)
+            else: 
+                y1 = random.uniform(1, -1)
+
+            x2 = random.uniform(-8, 8)
+            if (x2 < -7 or x2 > 7):
+                y2 = random.uniform(0, -4)
+            else: 
+                y2 = random.uniform(1, -1)
+
+            
+            p1_start_pos = [x1, y1]
+            p2_start_pos = [x2, y2]
         else:
             p1_start_pos = [5, 0] if p1_right else [-5, 0]
             p2_start_pos = [-5, 0] if p1_right else [5, 0]

@@ -184,10 +184,17 @@ class BasedAgent(Agent):
             action = self.act_helper.press_keys(["d"])
         elif not opp_KO:
             # Head toward opponent
-            if opp_pos[0] > pos[0]:
-                action = self.act_helper.press_keys(["d"])
+            if (opp_pos[0] > pos[0]):
+                action = self.act_helper.press_keys(['d'])
             else:
-                action = self.act_helper.press_keys(["a"])
+                action = self.act_helper.press_keys(['a'])
+
+            #Head away from opponent 
+            #if (opp_pos[0] > pos[0]) and (pos[0] < 7):
+            #    action = self.act_helper.press_keys(["a"])
+            #elif (opp_pos[0] < pos[0]) and (pos[0] > -7):
+            #    action = self.act_helper.press_keys(["d"])
+
 
         # Note: Passing in partial action
         # Jump if below map or opponent is above you
@@ -352,9 +359,9 @@ class CustomAgent(Agent):
     def _initialize(self) -> None:
         #The diffrent AI for each skill
         skills = {
-            "movement": 'checkpoints/Hierarch_Experiment_1_Movement/rl_model_4017600_steps',
+            "movement": 'checkpoints/Hierarch_Experiment_2_Movement/rl_model_12142434_steps',
             "combat": 'checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4005109_steps',
-            "recovery": 'checkpoints/Hierarch_Experiment_1_recovery/rl_model_1004400_steps',
+            "recovery": 'checkpoints/Hierarch_Experiment_2_Movement/rl_model_12142434_steps',
             "default": 'checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4005109_steps',
         }
         
@@ -394,7 +401,7 @@ class CustomAgent(Agent):
                 skill_name = "movement"
 
         # Attack if near
-        if (pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 4.0:
+        if (pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 9.0:
             #if skill_name != "combat":
             #    print(f"Switching to combat skill")
             skill_name = "combat"
@@ -498,7 +505,7 @@ def damage_interaction_reward(
 
 
 def danger_zone_reward(
-    env: WarehouseBrawl, zone_penalty: int = 1, zone_height: float = 4
+    env: WarehouseBrawl, zone_penalty: int = 1, zone_height: float = 3
 ) -> float:
     """
     Applies a penalty for every time frame player surpases a certain height threshold in the environment.
@@ -576,9 +583,10 @@ def head_to_opponent(
     player: Player = env.objects["player"]
     opponent: Player = env.objects["opponent"]
 
-    # Apply penalty if the player is in the danger zone
-    multiplier = -1 if player.body.position.x > opponent.body.position.x else 1
-    reward = multiplier * (player.body.position.x - player.prev_x)
+    if (abs(player.body.position.x - opponent.body.position.x) < abs(player.prev_x - opponent.prev_x)):
+        reward = 1
+    else:
+        reward = -1
 
     return reward
 
@@ -608,7 +616,7 @@ def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
     if agent == "player":
         return -2
     else:
-        return 1.0
+        return 0
 
 
 def on_equip_reward(env: WarehouseBrawl, agent: str) -> float:
@@ -678,7 +686,17 @@ def near_edge_penalty(
         return 1
     return 0
 
+def speed_reward(
+    env: WarehouseBrawl,
+) -> float:
+    """
+    Reward for moving quickly.
+    """
+    # Get player object from the environment
+    player: Player = env.objects["player"]
 
+    speed = player.body.angular_velocity 
+    return speed / 10
 """
 Add your dictionary of RewardFunctions here using RewTerms
 """
@@ -687,23 +705,24 @@ Add your dictionary of RewardFunctions here using RewTerms
 def gen_reward_manager():
     reward_functions = {
         #'target_height_reward': RewTerm(func=base_height_l2, weight=0.0, params={'target_height': -4, 'obj_name': 'player'}),
-        #"danger_zone_reward": RewTerm(func=danger_zone_reward, weight = 0.05),
-        "damage_interaction_reward": RewTerm(func=damage_interaction_reward, weight=3),
+        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight = 10),
+        #"damage_interaction_reward": RewTerm(func=damage_interaction_reward, weight=3),
         #'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=-0.1),
-        #"head_to_opponent": RewTerm(func=head_to_opponent, weight=0.05),
+        "head_to_opponent": RewTerm(func=head_to_opponent, weight=10),
         #"holding_more_than_3_keys": RewTerm(func=holding_more_than_3_keys, weight=-0.05),
-        #'attack_reward': RewTerm(func=in_state_reward, weight=1, params={'desired_state': AttackState}),
-        #'taunt_reward': RewTerm(func=in_state_reward, weight=-10),
+        #'attack_reward': RewTerm(func=in_state_reward, weight= -1, params={'desired_state': AttackState}),
+        #'taunt_reward': RewTerm(func=in_state_reward, weight=-1),
         #'face_opponent_reward': RewTerm(func=face_opponent_reward, weight=0.05),
         #"attack_miss_reward": RewTerm(func=attack_miss_reward, weight = 3),
-        "near_edge_penalty": RewTerm(func=near_edge_penalty, weight=-0.5),
+        "near_edge_penalty": RewTerm(func=near_edge_penalty, weight=-0.1),
+        #"speed_reward": RewTerm(func=speed_reward, weight=0.5),
     }
     signal_subscriptions = {
-        "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=10)),
-        "on_knockout_reward": ("knockout_signal",RewTerm(func=on_knockout_reward, weight=5),),
-        "on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=2)),
+        #"on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=50)),
+        "on_knockout_reward": ("knockout_signal",RewTerm(func=on_knockout_reward, weight=25),),
+        #"on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=2)),
         #"on_equip_reward": ("weapon_equip_signal",RewTerm(func=on_equip_reward, weight=5),),
-        #"on_drop_reward": ("weapon_drop_signal",RewTerm(func=on_drop_reward, weight=20),),
+        #"on_drop_reward": ("weapon_drop_signal",RewTerm(func=on_drop_reward, weight=10),),
     }
     return RewardManager(reward_functions, signal_subscriptions)
 
@@ -717,7 +736,7 @@ The main function runs training. You can change configurations such as the Agent
 if __name__ == "__main__":
     # Create agent
     # Start here if you want to train from scratch. e.g:
-    my_agent = RecurrentPPOAgent(file_path='checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_3003409_steps')
+    my_agent = RecurrentPPOAgent(file_path='checkpoints/Hierarch_Experiment_2_Movement/rl_model_11640234_steps')
 
     # Start here if you want to train from a specific timestep. e.g:
     # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_324000_steps")
@@ -734,10 +753,10 @@ if __name__ == "__main__":
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent,  # Agent to save
-        save_freq=100_000,  # Save frequency
+        save_freq=200_000,  # Save frequency
         max_saved=40,  # Maximum number of saved models
         save_path="checkpoints",  # Save path
-        run_name="Hierarch_Experiment_3.1_Combat",  # Run names
+        run_name="Hierarch_Experiment_2_Movement",  # Run names
         mode=SaveHandlerMode.RESUME,  # Save mode, FORCE or RESUME
     )
 
@@ -755,6 +774,6 @@ if __name__ == "__main__":
         save_handler,
         opponent_cfg,
         CameraResolution.LOW,
-        train_timesteps=1_000_000,
+        train_timesteps=500_000,
         train_logging=TrainLogging.PLOT,
     )
