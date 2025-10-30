@@ -27,10 +27,14 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from environment.agent import *
 from typing import Optional, Type, List, Tuple
 
-import user.environment as env
-from user.environment.WarehouseBrawl import WarehouseBrawl
-from user.environment.environment import GameObject, Player, PlayerObjectState, WalkingState, AttackState, TauntState
+if torch.cuda.is_available():
+    torch.set_default_device("cuda")
+elif torch.backends.mps.is_available():
+    torch.set_default_device("mps")
+else:
+    torch.set_default_device("cpu")
 
+print(f"Using device {torch.get_default_device()}")
 
 # -------------------------------------------------------------------------
 # ----------------------------- AGENT CLASSES -----------------------------
@@ -48,7 +52,7 @@ class SB3Agent(Agent):
 
     def __init__(
         self,
-        sb3_class: Optional[Type[BaseAlgorithm]] = PPO,
+        sb3_class: Optional[Type[BaseAlgorithm]] = RecurrentPPO,
         file_path: Optional[str] = None,
     ):
         self.sb3_class = sb3_class
@@ -61,7 +65,7 @@ class SB3Agent(Agent):
                 self.env,
                 verbose=2,
                 n_steps=30 * 90 * 3,
-                batch_size=256,
+                batch_size=128,
                 ent_coef=0.01,
             )
             del self.env
@@ -106,8 +110,8 @@ class RecurrentPPOAgent(Agent):
         if self.file_path is None:
             policy_kwargs = {
                 "activation_fn": nn.ReLU,
-                "lstm_hidden_size": 512,
-                "net_arch": [dict(pi=[32, 32], vf=[32, 32])],
+                "lstm_hidden_size": 128,
+                "net_arch": [dict(pi=[64, 64], vf=[64, 64])],
                 "shared_lstm": True,
                 "enable_critic_lstm": False,
                 "share_features_extractor": True,
@@ -115,10 +119,16 @@ class RecurrentPPOAgent(Agent):
             self.model = RecurrentPPO(
                 "MlpLstmPolicy",
                 self.env,
-                verbose=0,
-                n_steps=30 * 90 * 20,
-                batch_size=16,
-                ent_coef=0.05,
+                verbose=2,
+                n_steps=30 * 90 * 3,
+                batch_size=128,
+                ent_coef=0.01,
+                gamma=0.995,
+                learning_rate=3e-4,
+                n_epochs=10,
+                n_steps=90 * 3,
+                batch_size=256,
+                ent_coef=0.001,
                 policy_kwargs=policy_kwargs,
             )
             del self.env
@@ -133,7 +143,7 @@ class RecurrentPPOAgent(Agent):
             obs,
             state=self.lstm_states,
             episode_start=self.episode_starts,
-            deterministic=True,
+            deterministic=False,
         )
         if self.episode_starts:
             self.episode_starts = False
@@ -142,7 +152,7 @@ class RecurrentPPOAgent(Agent):
     def save(self, file_path: str) -> None:
         self.model.save(file_path)
 
-    def learn(self, env, total_timesteps, log_interval: int = 2, verbose=0):
+    def learn(self, env, total_timesteps, log_interval: int = 5, verbose=2):
         self.model.set_env(env)
         self.model.verbose = verbose
         self.model.learn(total_timesteps=total_timesteps, log_interval=log_interval)
@@ -173,19 +183,26 @@ class BasedAgent(Agent):
             action = self.act_helper.press_keys(["d"])
         elif not opp_KO:
             # Head toward opponent
-            if opp_pos[0] > pos[0]:
-                action = self.act_helper.press_keys(["d"])
+            if (opp_pos[0] > pos[0]):
+                action = self.act_helper.press_keys(['d'])
             else:
-                action = self.act_helper.press_keys(["a"])
+                action = self.act_helper.press_keys(['a'])
+
+            #Head away from opponent
+            #if (opp_pos[0] > pos[0]) and (pos[0] < 7):
+            #    action = self.act_helper.press_keys(["a"])
+            #elif (opp_pos[0] < pos[0]) and (pos[0] > -7):
+            #    action = self.act_helper.press_keys(["d"])
+
 
         # Note: Passing in partial action
         # Jump if below map or opponent is above you
         if (pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0:
             action = self.act_helper.press_keys(["space"], action)
 
-        # Attack if near
         if (pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 4.0:
             action = self.act_helper.press_keys(["j"], action)
+
         return action
 
 
@@ -330,52 +347,86 @@ class MLPExtractor(BaseFeaturesExtractor):
 
 
 class CustomAgent(Agent):
-    def __init__(
-        self,
-        sb3_class: Optional[Type[BaseAlgorithm]] = PPO,
-        file_path: str = None,
-        extractor: BaseFeaturesExtractor = None,
-    ):
-        self.sb3_class = sb3_class
-        self.extractor = extractor
+    def __init__(self, file_path: Optional[str] = None):
         super().__init__(file_path)
+        self.lstm_states = None
+        self.episode_starts = np.ones((1,), dtype=bool)
+        self.skills = {}
+        self.active_skill = None
+        self.time = 0
 
     def _initialize(self) -> None:
-        if self.file_path is None:
-            self.model = self.sb3_class(
-                "MlpPolicy",
-                self.env,
-                policy_kwargs=self.extractor.get_policy_kwargs(),
-                verbose=2,
-                n_steps=30 * 90 * 3,
-                batch_size=256,
-                ent_coef=0.01,
-            )
-            del self.env
-        else:
-            self.model = self.sb3_class.load(self.file_path)
+        #The diffrent AI for each skill
+        skills = {
+            "movement": 'checkpoints/Hierarch_Experiment_2_Movement/rl_model_12142434_steps',
+            "combat": 'checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4005109_steps',
+            "recovery": 'checkpoints/Hierarch_Experiment_2_Movement/rl_model_12142434_steps',
+            "default": 'checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4005109_steps',
+        }
 
-    def _gdown(self) -> str:
-        # Call gdown to your link
-        return ""
+        #Go through and make sure each skill can be loaded
+        for name, path in skills.items():
+            try:
+                self.skills[name] = RecurrentPPO.load(path)
+                print(f"AI Loaded skill: {name} from {path}")
+            except Exception as e:
+                print(f"AI Could not load {name}: {e}")
 
-    # def set_ignore_grad(self) -> None:
-    # self.model.set_ignore_act_grad(True)
+        #If no skills loaded, load a default one
+        if not self.skills:
+            print("No skills loaded, using default.")
+            self.skills["default"] = RecurrentPPO.load('checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4005109_steps')
+
+        self.active_skill = self.skills.get("movement", list(self.skills.values())[0])
 
     def predict(self, obs):
-        action, _ = self.model.predict(obs)
+        self.time += 1
+        pos = self.obs_helper.get_section(obs, "player_pos")
+        opp_pos = self.obs_helper.get_section(obs, "opponent_pos")
+        opp_KO = self.obs_helper.get_section(obs, "opponent_state") in [5, 11]
+        action = self.act_helper.zeros()
+        skill_name = "default"
+
+        # If off the edge, come back
+        if (pos[0] < -7 or (pos[0] > -2 and pos[0] < 2) or pos[0] > 7) or (pos[1] > 3.5):
+            #if skill_name != "recovery":
+            #    print("Switching to recovery skill")
+            skill_name = "recovery"
+        elif not opp_KO:
+            # Head toward opponent
+            #if skill_name != "movement":
+            #    print("Switching to movement skill")
+            if opp_pos[0] > pos[0]:
+                skill_name = "movement"
+
+        # Attack if near
+        if (pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 9.0:
+            #if skill_name != "combat":
+            #    print(f"Switching to combat skill")
+            skill_name = "combat"
+
+        # Switch to the selected skill
+        if skill_name in self.skills:
+            self.lstm_states = None
+            self.episode_starts = np.ones((1,), dtype=bool)
+            self.current_skill = skill_name
+            self.active_skill = self.skills[skill_name]
+
+        else:
+            print(f"Skill '{skill_name}' not loaded, using fallback.")
+            self.active_skill = self.skills["default"]
+
+        #predict using the active skill
+        action, self.lstm_states = self.active_skill.predict(
+            obs,
+            state=self.lstm_states,
+            episode_start=self.episode_starts,
+            deterministic=True
+        )
+
+        self.episode_starts = np.zeros((1,), dtype=bool)
         return action
 
-    def save(self, file_path: str) -> None:
-        self.model.save(file_path, include=["num_timesteps"])
-
-    def learn(self, env, total_timesteps, log_interval: int = 1, verbose=2):
-        self.model.set_env(env)
-        self.model.verbose = verbose
-        self.model.learn(
-            total_timesteps=total_timesteps,
-            log_interval=log_interval,
-        )
 
 
 # --------------------------------------------------------------------------------
@@ -454,7 +505,7 @@ def damage_interaction_reward(
 
 
 def danger_zone_reward(
-    env: WarehouseBrawl, zone_penalty: int = 1, zone_height: float = 4.2
+    env: WarehouseBrawl, zone_penalty: int = 1, zone_height: float = 3
 ) -> float:
     """
     Applies a penalty for every time frame player surpases a certain height threshold in the environment.
@@ -473,12 +524,12 @@ def danger_zone_reward(
     # Apply penalty if the player is in the danger zone
     reward = -zone_penalty if player.body.position.y >= zone_height else 0.0
 
-    return reward * env.dt
+    return reward
 
 
 def in_state_reward(
     env: WarehouseBrawl,
-    desired_state: Type[PlayerObjectState] = WalkingState,
+    desired_state: Type[PlayerObjectState] = TauntState,
 ) -> float:
     """
     Applies a penalty for every time frame player surpases a certain height threshold in the environment.
@@ -497,7 +548,7 @@ def in_state_reward(
     # Apply penalty if the player is in the danger zone
     reward = 1 if isinstance(player.state, desired_state) else 0.0
 
-    return reward * env.dt
+    return reward
 
 
 def head_to_middle_reward(
@@ -517,11 +568,11 @@ def head_to_middle_reward(
     # Get player object from the environment
     player: Player = env.objects["player"]
 
-    # Apply penalty if the player is in the danger zone
-    multiplier = 1 if player.body.position.x > 0 else -1
-    reward = multiplier * (player.body.position.x - player.prev_x)
+    # Apply penalty if the player is in the middle
+    if player.body.position.x >2 or player.body.position.x < -2:
+        return 1
 
-    return reward
+    return 0
 
 
 def head_to_opponent(
@@ -608,14 +659,14 @@ def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
     if agent == "player":
         return 1.0
     else:
-        return -1.0
+        return -2
 
 
 def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
     if agent == "player":
-        return -1.0
+        return -2
     else:
-        return 1.0
+        return 0
 
 
 def on_equip_reward(env: WarehouseBrawl, agent: str) -> float:
@@ -625,6 +676,7 @@ def on_equip_reward(env: WarehouseBrawl, agent: str) -> float:
         elif env.objects["player"].weapon == "Spear":
             return 1.0
     return 0.0
+
 
 def on_drop_reward(env: WarehouseBrawl, agent: str) -> float:
     if agent == "player":
@@ -639,7 +691,62 @@ def on_combo_reward(env: WarehouseBrawl, agent: str) -> float:
     else:
         return 1.0
 
+def face_opponent_reward(
+    env: WarehouseBrawl,
+) -> float:
+    """
+    Reward for facing the opponent.
+    """
+    # Get player and opponent objects from the environment
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
 
+    # Determine if the player is facing the opponent
+    if (player.body.position.x < opponent.body.position.x and player.facing == Facing.RIGHT):
+          return 1
+    elif (player.body.position.x > opponent.body.position.x and player.facing == Facing.LEFT):
+          return 1
+
+    return -1
+
+def attack_miss_reward(
+    env: WarehouseBrawl,
+) -> float:
+    """
+    Penalty for missing an attack.
+    """
+    # Get player object from the environment
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+
+    if (opponent.damage_taken_this_frame > 0 and isinstance(player.state, AttackState)):
+        return 30
+    return -1/30
+
+def near_edge_penalty(
+    env: WarehouseBrawl,
+) -> float:
+    """
+    Penalty for being near the edge of the platform.
+    """
+    # Get player object from the environment
+    player: Player = env.objects["player"]
+
+    if player.body.position.x < -6.5 or (player.body.position.x > -2.5 and player.body.position.x < 2.5) or player.body.position.x > 6.5:
+        return 1
+    return 0
+
+def speed_reward(
+    env: WarehouseBrawl,
+) -> float:
+    """
+    Reward for moving quickly.
+    """
+    # Get player object from the environment
+    player: Player = env.objects["player"]
+
+    speed = player.body.angular_velocity
+    return speed / 10
 """
 Add your dictionary of RewardFunctions here using RewTerms
 """
@@ -694,31 +801,32 @@ if __name__ == "__main__":
     my_agent = RecurrentPPOAgent(file_path="checkpoints/SB3_PPO_3/rl_model_216000_steps")
 
     # Start here if you want to train from a specific timestep. e.g:
-    # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_216000_steps")
+    # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_324000_steps")
 
     # Reward manager
     reward_manager = gen_reward_manager()
-    # Self-play settings
-    selfplay_handler = SelfPlayRandom(
-        partial(type(my_agent)),  # Agent class and its keyword arguments
+
+    #Self-play settings
+    #selfplay_handler = SelfPlayRandom(
+    #    partial(type(my_agent)),  # Agent class and its keyword arguments
         # type(my_agent) = Agent class
-    )
+    #)
 
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent,  # Agent to save
-        save_freq=100_000,  # Save frequency
-        max_saved=400,  # Maximum number of saved models
+        save_freq=200_000,  # Save frequency
+        max_saved=40,  # Maximum number of saved models
         save_path="checkpoints",  # Save path
-        run_name="SB3_PPO_3",  # Run name
+        run_name="Hierarch_Experiment_2_Movement",  # Run names
         mode=SaveHandlerMode.RESUME,  # Save mode, FORCE or RESUME
     )
 
     # Set opponent settings here:
     opponent_specification = {
-        "self_play": (8, selfplay_handler),
-        #'constant_agent': (0.5, partial(ConstantAgent)),
-        #'based_agent': (1.5, partial(BasedAgent)),
+        #"self_play": (1, selfplay_handler),
+        'based_agent': (9, partial(BasedAgent)),
+
     }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 
@@ -728,6 +836,6 @@ if __name__ == "__main__":
         save_handler,
         opponent_cfg,
         CameraResolution.LOW,
-        train_timesteps=1_000_000,
+        train_timesteps=500_000,
         train_logging=TrainLogging.PLOT,
     )
