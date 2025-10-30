@@ -15,6 +15,13 @@ assets.zip
 
 /checkpoints/*
 
+# jupyter
+.ipynb_checkpoints/
+
+# pytest
+
+.pytest_cache/
+
 # Videos, zip files, or csv
 *.mp4
 *.zip
