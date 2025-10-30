@@ -14,4 +14,4 @@ The UTMIST AI^2 Tournament is UTMIST's flagship hackathon/tournament event focus
 
 ### On mps
 
-Start using `PYTORCH_ENABLE_MPS_FALLBACK=1 python user/train_agent.py` to enable fallback when using mps.
+Add the fallback using `PYTORCH_ENABLE_MPS_FALLBACK=1` when running anything using mps.

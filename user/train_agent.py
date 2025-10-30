@@ -818,9 +818,9 @@ if __name__ == "__main__":
         partial(type(my_agent)),  # Agent class and its keyword arguments
     )
 
-    # self_play_random_manager = SelfPlayRandom(partial(type(my_agent)))
+    self_play_random_manager = SelfPlayRandom(partial(type(my_agent)))
 
-    # self_play_latest_manager = SelfPlayLatest(partial(type(my_agent)))
+    self_play_latest_manager = SelfPlayLatest(partial(type(my_agent)))
 
     # Set save settings here:
     save_handler = SaveHandler(
