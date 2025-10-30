@@ -654,14 +654,14 @@ if __name__ == "__main__":
     # Reward manager
     reward_manager = gen_reward_manager()
     # Self-play settings
-    selfplay_handler = SelfPlayRandom(
-        partial(type(my_agent)),  # Agent class and its keyword arguments
-        # type(my_agent) = Agent class
-    )
+    # selfplay_handler = SelfPlayRandom(
+    #     partial(type(my_agent)),  # Agent class and its keyword arguments
+    #     # type(my_agent) = Agent class
+    # )
 
-    # self_play_random_manager = SelfPlayRandom(partial(type(my_agent)))
+    self_play_random_manager = SelfPlayRandom(partial(type(my_agent)))
 
-    # self_play_latest_manager = SelfPlayLatest(partial(type(my_agent)))
+    self_play_latest_manager = SelfPlayLatest(partial(type(my_agent)))
 
     # Set save settings here:
     save_handler = SaveHandler(
@@ -675,9 +675,10 @@ if __name__ == "__main__":
 
     # Set opponent settings here:
     opponent_specification = {
-        "self_play": (8, selfplay_handler),
+        # "self_play": (8, selfplay_handler),
         # "self_play_latest": (8, self_play_latest_manager),
-        # "self_play_random": (4, self_play_random_manager),
+        "self_play": (4, self_play_random_manager),
+        "self_play": (4, self_play_latest_manager),
         #'constant_agent': (0.5, partial(ConstantAgent)),
         # "based_agent": (1.5, partial(BasedAgent)),
     }
