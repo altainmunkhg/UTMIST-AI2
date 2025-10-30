@@ -112,7 +112,7 @@ class RecurrentPPOAgent(Agent):
             policy_kwargs = {
                 "activation_fn": nn.ReLU,
                 "lstm_hidden_size": 128,
-                "net_arch": [dict(pi=[128, 128], vf=[128, 128])],
+                "net_arch": [dict(pi=[64, 64], vf=[64, 64])],
                 "shared_lstm": True,
                 "enable_critic_lstm": False,
                 "share_features_extractor": True,
@@ -353,9 +353,9 @@ class CustomAgent(Agent):
         #The diffrent AI for each skill
         skills = {
             "movement": 'checkpoints/Hierarch_Experiment_1_Movement/rl_model_4017600_steps',
-            "combat": 'checkpoints/Hierarch_Experiment_1_combatt/rl_model_1004400_steps',
+            "combat": 'checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4005109_steps',
             "recovery": 'checkpoints/Hierarch_Experiment_1_recovery/rl_model_1004400_steps',
-            "default": 'checkpoints/RecurrentPPO_Experiment_3.1/rl_model_3013200_steps',
+            "default": 'checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4005109_steps',
         }
         
         #Go through and make sure each skill can be loaded
@@ -369,7 +369,7 @@ class CustomAgent(Agent):
         #If no skills loaded, load a default one
         if not self.skills:
             print("No skills loaded, using default.")
-            self.skills["default"] = RecurrentPPO.load('checkpoints/RecurrentPPO_Experiment_3.1/rl_model_3013200_steps')
+            self.skills["default"] = RecurrentPPO.load('checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4005109_steps')
 
         self.active_skill = self.skills.get("movement", list(self.skills.values())[0])
 
@@ -401,7 +401,11 @@ class CustomAgent(Agent):
 
         # Switch to the selected skill
         if skill_name in self.skills:
+            self.lstm_states = None
+            self.episode_starts = np.ones((1,), dtype=bool)
+            self.current_skill = skill_name
             self.active_skill = self.skills[skill_name]
+
         else:
             print(f"Skill '{skill_name}' not loaded, using fallback.")
             self.active_skill = self.skills["default"]
@@ -494,7 +498,7 @@ def damage_interaction_reward(
 
 
 def danger_zone_reward(
-    env: WarehouseBrawl, zone_penalty: int = 1, zone_height: float = 4.2
+    env: WarehouseBrawl, zone_penalty: int = 1, zone_height: float = 4
 ) -> float:
     """
     Applies a penalty for every time frame player surpases a certain height threshold in the environment.
@@ -518,7 +522,7 @@ def danger_zone_reward(
 
 def in_state_reward(
     env: WarehouseBrawl,
-    desired_state: Type[PlayerObjectState] = WalkingState,
+    desired_state: Type[PlayerObjectState] = TauntState,
 ) -> float:
     """
     Applies a penalty for every time frame player surpases a certain height threshold in the environment.
@@ -597,12 +601,12 @@ def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
     if agent == "player":
         return 1.0
     else:
-        return -1.0
+        return -2
 
 
 def on_knockout_reward(env: WarehouseBrawl, agent: str) -> float:
     if agent == "player":
-        return -1.0
+        return -2
     else:
         return 1.0
 
@@ -629,6 +633,51 @@ def on_combo_reward(env: WarehouseBrawl, agent: str) -> float:
     else:
         return 1.0
 
+def face_opponent_reward(
+    env: WarehouseBrawl,
+) -> float:
+    """
+    Reward for facing the opponent.
+    """
+    # Get player and opponent objects from the environment
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+
+    # Determine if the player is facing the opponent
+    if (player.body.position.x < opponent.body.position.x and player.facing == Facing.RIGHT):
+          return 1
+    elif (player.body.position.x > opponent.body.position.x and player.facing == Facing.LEFT):
+          return 1
+
+    return -1
+
+def attack_miss_reward(
+    env: WarehouseBrawl,
+) -> float:
+    """
+    Penalty for missing an attack.
+    """
+    # Get player object from the environment
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+
+    if (opponent.damage_taken_this_frame > 0 and isinstance(player.state, AttackState)):
+        return 30
+    return -1/30
+    
+def near_edge_penalty(
+    env: WarehouseBrawl,
+) -> float:
+    """
+    Penalty for being near the edge of the platform.
+    """
+    # Get player object from the environment
+    player: Player = env.objects["player"]
+
+    if player.body.position.x < -6.5 or (player.body.position.x > -2.5 and player.body.position.x < 2.5) or player.body.position.x > 6.5:
+        return 1
+    return 0
+
 
 """
 Add your dictionary of RewardFunctions here using RewTerms
@@ -638,20 +687,23 @@ Add your dictionary of RewardFunctions here using RewTerms
 def gen_reward_manager():
     reward_functions = {
         #'target_height_reward': RewTerm(func=base_height_l2, weight=0.0, params={'target_height': -4, 'obj_name': 'player'}),
-        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight=0.5),
-        "damage_interaction_reward": RewTerm(func=damage_interaction_reward, weight=10.0),
-        'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=-0.1),
-        "head_to_opponent": RewTerm(func=head_to_opponent, weight=1),
-        "holding_more_than_3_keys": RewTerm(func=holding_more_than_3_keys, weight=-0.05),
+        #"danger_zone_reward": RewTerm(func=danger_zone_reward, weight = 0.05),
+        "damage_interaction_reward": RewTerm(func=damage_interaction_reward, weight=3),
+        #'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=-0.1),
+        #"head_to_opponent": RewTerm(func=head_to_opponent, weight=0.05),
+        #"holding_more_than_3_keys": RewTerm(func=holding_more_than_3_keys, weight=-0.05),
         #'attack_reward': RewTerm(func=in_state_reward, weight=1, params={'desired_state': AttackState}),
-        'taunt_reward': RewTerm(func=in_state_reward, weight=-1, params={'desired_state': TauntState}),
+        #'taunt_reward': RewTerm(func=in_state_reward, weight=-10),
+        #'face_opponent_reward': RewTerm(func=face_opponent_reward, weight=0.05),
+        #"attack_miss_reward": RewTerm(func=attack_miss_reward, weight = 3),
+        "near_edge_penalty": RewTerm(func=near_edge_penalty, weight=-0.5),
     }
     signal_subscriptions = {
-        "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=50)),
-        "on_knockout_reward": ("knockout_signal",RewTerm(func=on_knockout_reward, weight=8),),
-        "on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=5)),
-        "on_equip_reward": ("weapon_equip_signal",RewTerm(func=on_equip_reward, weight=10),),
-        "on_drop_reward": ("weapon_drop_signal",RewTerm(func=on_drop_reward, weight=15),),
+        "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=10)),
+        "on_knockout_reward": ("knockout_signal",RewTerm(func=on_knockout_reward, weight=5),),
+        "on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=2)),
+        #"on_equip_reward": ("weapon_equip_signal",RewTerm(func=on_equip_reward, weight=5),),
+        #"on_drop_reward": ("weapon_drop_signal",RewTerm(func=on_drop_reward, weight=20),),
     }
     return RewardManager(reward_functions, signal_subscriptions)
 
@@ -665,7 +717,7 @@ The main function runs training. You can change configurations such as the Agent
 if __name__ == "__main__":
     # Create agent
     # Start here if you want to train from scratch. e.g:
-    my_agent = RecurrentPPOAgent()
+    my_agent = RecurrentPPOAgent(file_path='checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_3003409_steps')
 
     # Start here if you want to train from a specific timestep. e.g:
     # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_324000_steps")
@@ -685,15 +737,14 @@ if __name__ == "__main__":
         save_freq=100_000,  # Save frequency
         max_saved=40,  # Maximum number of saved models
         save_path="checkpoints",  # Save path
-        run_name="Hierarch_Experiment_1_Combat",  # Run names
-        mode=SaveHandlerMode.FORCE,  # Save mode, FORCE or RESUME
+        run_name="Hierarch_Experiment_3.1_Combat",  # Run names
+        mode=SaveHandlerMode.RESUME,  # Save mode, FORCE or RESUME
     )
 
     # Set opponent settings here:
     opponent_specification = {
-        "self_play": (3, selfplay_handler),
-        'constant_agent': (2, partial(ConstantAgent)),
-        'based_agent': (5, partial(BasedAgent)),
+        #"self_play": (1, selfplay_handler),
+        'based_agent': (9, partial(BasedAgent)),
 
     }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)

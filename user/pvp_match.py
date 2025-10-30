@@ -14,13 +14,14 @@ import pygame
 
 pygame.init()
 
-my_agent = UserInputAgent()
+#my_agent = UserInputAgent()
 #my_agent = SubmittedAgent(file_path="checkpoints/RecurrentPPO_Experiment_3.1/rl_model_3013200_steps")
+my_agent = BasedAgent()
 
 # Input your file path here in SubmittedAgent if you are loading a model:
-opponent = SubmittedAgent(file_path="checkpoints/Hierarch_Experiment_1_Combat/rl_model_1000080_steps")
+opponent = CustomAgent()
 
-match_time = 99999
+match_time = 999999
 
 # Run a single real-time match
 run_real_time_match(
