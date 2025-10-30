@@ -35,6 +35,24 @@ else:
     torch.set_default_device("cpu")
 
 print(f"Using device {torch.get_default_device()}")
+
+if torch.cuda.is_available():
+    torch.set_default_device("cuda")
+elif torch.backends.mps.is_available():
+    torch.set_default_device("mps")
+else:
+    torch.set_default_device("cpu")
+
+print(f"Using device {torch.get_default_device()}")
+
+if torch.cuda.is_available():
+    torch.set_default_device("cuda")
+elif torch.backends.mps.is_available():
+    torch.set_default_device("mps")
+else:
+    torch.set_default_device("cpu")
+
+print(f"Using device {torch.get_default_device()}")
 # -------------------------------------------------------------------------
 # ----------------------------- AGENT CLASSES -----------------------------
 # -------------------------------------------------------------------------
@@ -800,6 +818,10 @@ if __name__ == "__main__":
         partial(type(my_agent)),  # Agent class and its keyword arguments
     )
 
+    # self_play_random_manager = SelfPlayRandom(partial(type(my_agent)))
+
+    # self_play_latest_manager = SelfPlayLatest(partial(type(my_agent)))
+
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent,  # Agent to save
@@ -807,7 +829,7 @@ if __name__ == "__main__":
         max_saved=40,  # Maximum number of saved models
         save_path="checkpoints",  # Save path
         run_name="Hierarch_Experiment_4_combat",  # Run names
-        mode=SaveHandlerMode.RESUME,  # Save mode, FORCE or RESUME
+        mode=SaveHandlerMode.FORCE,  # Save mode, FORCE or RESUME
     )
 
     # Set opponent settings here:
