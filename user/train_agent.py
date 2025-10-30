@@ -52,8 +52,7 @@ class SB3Agent(Agent):
 
     def __init__(
         self,
-        sb3_class: Optional[Type[BaseAlgorithm]] = PPO,
-        sb3_class: Optional[Type[BaseAlgorithm]] = PPO,
+        sb3_class: Optional[Type[BaseAlgorithm]] = RecurrentPPO,
         file_path: Optional[str] = None,
     ):
         self.sb3_class = sb3_class
@@ -66,7 +65,7 @@ class SB3Agent(Agent):
                 self.env,
                 verbose=2,
                 n_steps=30 * 90 * 3,
-                batch_size=256,
+                batch_size=128,
                 ent_coef=0.01,
             )
             del self.env
@@ -464,7 +463,7 @@ class RewardMode(Enum):
 
 def damage_interaction_reward(
     env: WarehouseBrawl,
-    mode: RewardMode = RewardMode.SYMMETRIC,
+    mode: RewardMode = RewardMode.ASYMMETRIC_OFFENSIVE,
 ) -> float:
     """
     Computes the reward based on damage interactions between players.
@@ -700,7 +699,6 @@ def speed_reward(
 """
 Add your dictionary of RewardFunctions here using RewTerms
 """
-
 
 def gen_reward_manager():
     reward_functions = {
