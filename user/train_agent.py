@@ -515,7 +515,7 @@ class RewardMode(Enum):
 
 def damage_interaction_reward(
     env: WarehouseBrawl,
-    mode: RewardMode = RewardMode.SYMMETRIC,
+    mode: RewardMode = RewardMode.ASYMMETRIC_OFFENSIVE,
 ) -> float:
     """
     Computes the reward based on damage interactions between players.
