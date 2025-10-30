@@ -27,6 +27,15 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from environment.agent import *
 from typing import Optional, Type, List, Tuple
 
+if torch.cuda.is_available():
+    torch.set_default_device("cuda")
+elif torch.backends.mps.is_available():
+    torch.set_default_device("mps")
+else:
+    torch.set_default_device("cpu")
+
+print(f"Using device {torch.get_default_device()}")
+
 # -------------------------------------------------------------------------
 # ----------------------------- AGENT CLASSES -----------------------------
 # -------------------------------------------------------------------------
@@ -102,7 +111,7 @@ class RecurrentPPOAgent(Agent):
             policy_kwargs = {
                 "activation_fn": nn.ReLU,
                 "lstm_hidden_size": 512,
-                "net_arch": [dict(pi=[32, 32], vf=[32, 32])],
+                "net_arch": [dict(pi=[128, 128], vf=[128, 128])],
                 "shared_lstm": True,
                 "enable_critic_lstm": False,
                 "share_features_extractor": True,
@@ -111,9 +120,12 @@ class RecurrentPPOAgent(Agent):
                 "MlpLstmPolicy",
                 self.env,
                 verbose=0,
-                n_steps=30 * 90 * 20,
-                batch_size=16,
-                ent_coef=0.05,
+                n_steps=30 * 90 * 10,
+                batch_size=64,
+                ent_coef=0.01,
+                gamma=0.995,
+                learning_rate=3e-4,
+                n_epochs=10,
                 policy_kwargs=policy_kwargs,
             )
             del self.env
@@ -634,7 +646,7 @@ The main function runs training. You can change configurations such as the Agent
 if __name__ == "__main__":
     # Create agent
     # Start here if you want to train from scratch. e.g:
-    my_agent = SB3Agent(file_path="checkpoints/SB3_PPO_2/rl_model_2008800_steps")
+    my_agent = SB3Agent()
 
     # Start here if you want to train from a specific timestep. e.g:
     # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_324000_steps")
@@ -647,6 +659,10 @@ if __name__ == "__main__":
         # type(my_agent) = Agent class
     )
 
+    # self_play_random_manager = SelfPlayRandom(partial(type(my_agent)))
+
+    # self_play_latest_manager = SelfPlayLatest(partial(type(my_agent)))
+
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent,  # Agent to save
@@ -654,14 +670,16 @@ if __name__ == "__main__":
         max_saved=40,  # Maximum number of saved models
         save_path="checkpoints",  # Save path
         run_name="SB3_PPO_3",  # Run name
-        mode=SaveHandlerMode.RESUME,  # Save mode, FORCE or RESUME
+        mode=SaveHandlerMode.FORCE,  # Save mode, FORCE or RESUME
     )
 
     # Set opponent settings here:
     opponent_specification = {
         "self_play": (8, selfplay_handler),
+        # "self_play_latest": (8, self_play_latest_manager),
+        # "self_play_random": (4, self_play_random_manager),
         #'constant_agent': (0.5, partial(ConstantAgent)),
-        #'based_agent': (1.5, partial(BasedAgent)),
+        # "based_agent": (1.5, partial(BasedAgent)),
     }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 
