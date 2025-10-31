@@ -192,30 +192,39 @@ class BasedAgent(Agent):
     def predict(self, obs):
         self.time += 1
         pos = self.obs_helper.get_section(obs, "player_pos")
+        weapon = self.obs_helper.get_section(obs, "player_weapon_type")
         opp_pos = self.obs_helper.get_section(obs, "opponent_pos")
         opp_KO = self.obs_helper.get_section(obs, "opponent_state") in [5, 11]
         action = self.act_helper.zeros()
 
         # If off the edge, come back
+        #Pick up weapon
+        if weapon == [0.] and self.time % 2 == 0:
+            action = press(action,["h"],self)
+
         if pos[0] > 10.67 / 2:
-            action = self.act_helper.press_keys(["a"])
+            action = press(action,['a'],self)
         elif pos[0] < -10.67 / 2:
-            action = self.act_helper.press_keys(["d"])
-        elif not opp_KO:
+            action = press(action,["d"],self)
+        elif (not opp_KO and opp_pos[1] < 3):
             # Head toward opponent
             if (opp_pos[0] > pos[0]):
-                action = self.act_helper.press_keys(['d'])
+                action = press(action,["d"],self)
             else:
-                action = self.act_helper.press_keys(['a'])
+                action = press(action,["a"],self)
+        else:
+            action = press(action,["a"],self)
+
 
         # Note: Passing in partial action
         # Jump if below map or opponent is above you
-        if (pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0:
-            action = self.act_helper.press_keys(["space"], action)
+        if ((pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0):
+            action = press(action,["space"],self)
 
         # Attack if near
         if (pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 4.0:
-            action = self.act_helper.press_keys(["j"], action)
+            if (self.time%2 == 0):
+                action = press(action,["j"],self)
 
         return action
 
@@ -404,28 +413,35 @@ class CustomAgent(Agent):
         self.active_skill = None
         self.time = 0
         self.prevpos = [0,0]
+        self.lstm_states = None
+        self.episode_starts = np.ones((1,), dtype=bool)
         
     def _initialize(self) -> None:
-        #The diffrent AI for each skill
-        self.skills = {
-            "movement": 'checkpoints/Hierarch_Experiment_2_Movement/rl_model_12142434_steps',
-            "combat": 'checkpoints/Hierarch_Experiment_4_combat/rl_model_18954000_steps',
-            "default": 'checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4003419_steps',
-        }
-        
-        #Go through and make sure each skill can be loaded
-        for name, path in self.skills.items():
-            try:
-                self.skills[name] = RecurrentPPO.load(path)
-                print(f"AI Loaded skill: {name} from {path}")
-            except Exception as e:
-                print(f"AI Could not load {name}: {e}")
+        if self.file_path is None:
+            policy_kwargs = {
+                "activation_fn": nn.ReLU,
+                "lstm_hidden_size": 128,
+                "net_arch": [dict(pi=[64, 64], vf=[64, 64])],
+                "shared_lstm": True,
+                "enable_critic_lstm": False,
+                "share_features_extractor": True,
+            }
+            self.model = RecurrentPPO(
+                "MlpLstmPolicy",
+                self.env,
+                verbose=2,
+                n_steps=30 * 90 * 3,
+                ent_coef=0.005,
+                batch_size=128,
+                policy_kwargs=policy_kwargs,
+            )
+            del self.env
+        else:
+            self.model = RecurrentPPO.load(self.file_path)
 
-        #If no skills loaded, load a default one
-        if not self.skills:
-            print("No skills loaded, using default.")
-            self.skills["default"] = RecurrentPPO.load('checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4003419_steps')
 
+    def reset(self) -> None:
+        self.episode_starts = True
 
     def predict(self, obs):
         self.time += 1
@@ -434,27 +450,15 @@ class CustomAgent(Agent):
         opp_pos = self.obs_helper.get_section(obs, "opponent_pos")
         opp_KO = self.obs_helper.get_section(obs, "opponent_state") in [5, 11]
         action = self.act_helper.zeros()
-        still_in_air = False
         
         # Attack if near
         if ((pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 4.0) and not opp_KO and pos[0] > -7 and pos[0] < 7:
-            skill_name = "combat"
-            # Switch to the selected skill
-            if skill_name in self.skills:
-                self.current_skill = skill_name
-                self.active_skill = self.skills[skill_name]
-            else:
-                print(f"Skill '{skill_name}' not loaded, using fallback.")
-                self.active_skill = self.skills["combat"]
 
-            self.lstm_states = None
-            self.episode_starts = np.ones((1,), dtype=bool)
-
-            action, self.lstm_states = self.active_skill.predict(
+            action, self.lstm_states = self.model.predict(
                 obs,
                 state=self.lstm_states,
                 episode_start=self.episode_starts,
-                deterministic=True,
+                deterministic=False,
             )
             self.episode_starts = np.zeros((1,), dtype=bool)
 
@@ -493,7 +497,17 @@ class CustomAgent(Agent):
             if ((pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0):
                 action = press(action,["space"],self)
 
+        if self.episode_starts:
+            self.episode_starts = False
         return action
+    
+    def save(self, file_path: str) -> None:
+        self.model.save(file_path)
+
+    def learn(self, env, total_timesteps, log_interval: int = 5, verbose=2):
+        self.model.set_env(env)
+        self.model.verbose = verbose
+        self.model.learn(total_timesteps=total_timesteps, log_interval=log_interval)
 
 
 
@@ -790,26 +804,26 @@ Add your dictionary of RewardFunctions here using RewTerms
 def gen_reward_manager():
     reward_functions = {
         #'target_height_reward': RewTerm(func=base_height_l2, weight=0.0, params={'target_height': -4, 'obj_name': 'player'}),
-        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight = 0.05),
+        #"danger_zone_reward": RewTerm(func=danger_zone_reward, weight = 0.05),
         "damage_interaction_reward": RewTerm(func=damage_interaction_reward, weight=3),
         #'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=-0.5),
-        "head_to_opponent": RewTerm(func=head_to_opponent, weight=0.5),
-        "holding_more_than_3_keys": RewTerm(func=holding_more_than_3_keys, weight=-2),
+        #"head_to_opponent": RewTerm(func=head_to_opponent, weight=0.5),
+        "holding_more_than_3_keys": RewTerm(func=holding_more_than_3_keys, weight=-0.5),
         #'attack_reward': RewTerm(func=in_state_reward, weight= -1, params={'desired_state': AttackState}),
-        'taunt_reward': RewTerm(func=in_state_reward, weight=-10),
+        #'taunt_reward': RewTerm(func=in_state_reward, weight=-10),
         'face_opponent_reward': RewTerm(func=face_opponent_reward, weight=0.05),
         #"attack_miss_reward": RewTerm(func=attack_miss_reward, weight = 1),
-        "near_edge_penalty": RewTerm(func=near_edge_penalty, weight=-0.05),
-        "speed_reward": RewTerm(func=speed_reward, weight=0.05),
-        'away_from_stage_reward': RewTerm(func=away_from_stage, weight= -1.0),
-        'staying_still': RewTerm(func=staying_still, weight= -0.1)
+        #"near_edge_penalty": RewTerm(func=near_edge_penalty, weight=-0.05),
+        #"speed_reward": RewTerm(func=speed_reward, weight=0.05),
+        #'away_from_stage_reward': RewTerm(func=away_from_stage, weight= -1.0),
+        #'staying_still': RewTerm(func=staying_still, weight= -0.1)
     }
     signal_subscriptions = {
-        "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=50)),
-        "on_knockout_reward": ("knockout_signal",RewTerm(func=on_knockout_reward, weight=25),),
-        "on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=1)),
-        "on_equip_reward": ("weapon_equip_signal",RewTerm(func=on_equip_reward, weight=1),),
-        "on_drop_reward": ("weapon_drop_signal",RewTerm(func=on_drop_reward, weight=10),),
+        "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=10)),
+        "on_knockout_reward": ("knockout_signal",RewTerm(func=on_knockout_reward, weight=7),),
+        #"on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=1)),
+        #"on_equip_reward": ("weapon_equip_signal",RewTerm(func=on_equip_reward, weight=1),),
+        #"on_drop_reward": ("weapon_drop_signal",RewTerm(func=on_drop_reward, weight=10),),
     }
     return RewardManager(reward_functions, signal_subscriptions)
 
@@ -823,7 +837,7 @@ The main function runs training. You can change configurations such as the Agent
 if __name__ == "__main__":
     # Create agent
     # Start here if you want to train from scratch. e.g:
-    my_agent = RecurrentPPOAgent(file_path='checkpoints/Hierarch_Experiment_4_combat/rl_model_18851400_steps')
+    my_agent = CustomAgent(file_path="checkpoints/Custom_Experiment_1/rl_model_202500_steps")
 
     # Start here if you want to train from a specific timestep. e.g:
     # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_324000_steps")
@@ -842,18 +856,18 @@ if __name__ == "__main__":
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent,  # Agent to save
-        save_freq=200_000,  # Save frequency
+        save_freq=100_000,  # Save frequency
         max_saved=40,  # Maximum number of saved models
         save_path="checkpoints",  # Save path
-        run_name="Hierarch_Experiment_4_combat",  # Run names
-        mode=SaveHandlerMode.FORCE,  # Save mode, FORCE or RESUME
+        run_name="Custom_Experiment_1",  # Run names
+        mode=SaveHandlerMode.RESUME,  # Save mode, FORCE or RESUME
     )
 
     # Set opponent settings here:
     opponent_specification = {
         #"self_play": (2, selfplay_handler),
-        #'based_agent': (10, partial(BasedAgent)),
-        'constant_agent': (5,partial(ConstantAgent))
+        'based_agent': (10, partial(BasedAgent)),
+        #'constant_agent': (5,partial(ConstantAgent))
     }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 
@@ -863,6 +877,6 @@ if __name__ == "__main__":
         save_handler,
         opponent_cfg,
         CameraResolution.LOW,
-        train_timesteps=200_000,
+        train_timesteps=1_000_000,
         train_logging=TrainLogging.PLOT,
     )

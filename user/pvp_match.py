@@ -22,7 +22,7 @@ my_agent = BasedAgent()
 # Input your file path here in SubmittedAgent if you are loading a model:
 #opponent = SubmittedAgent(file_path='checkpoints/Hierarch_Experiment_4_combat/rl_model_18954000_steps.zip')
 #opponent = BasedAgent()
-opponent = CustomAgent()
+opponent = CustomAgent(file_path='checkpoints/Custom_Experiment_1/rl_model_202500_steps')
 
 match_time = 999999
 
