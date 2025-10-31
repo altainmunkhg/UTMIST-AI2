@@ -217,6 +217,7 @@ class BasedAgent(Agent):
         if (pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0:
             action = self.act_helper.press_keys(["space"], action)
 
+        # Attack if near
         if (pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 4.0:
             action = self.act_helper.press_keys(["j"], action)
 
@@ -515,7 +516,7 @@ class RewardMode(Enum):
 
 def damage_interaction_reward(
     env: WarehouseBrawl,
-    mode: RewardMode = RewardMode.ASYMMETRIC_OFFENSIVE,
+    mode: RewardMode = RewardMode.SYMMETRIC,
 ) -> float:
     """
     Computes the reward based on damage interactions between players.
