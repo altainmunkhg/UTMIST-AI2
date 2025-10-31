@@ -137,11 +137,7 @@ class RecurrentPPOAgent(Agent):
                 self.env,
                 verbose=2,
                 n_steps=30 * 90 * 3,
-                batch_size=64,
-                verbose=2,
-                n_steps=30 * 90 * 3,
                 ent_coef=0.01,
-                n_epochs=10,
                 batch_size=128,
                 policy_kwargs=policy_kwargs,
             )
@@ -394,6 +390,10 @@ class MLPExtractor(BaseFeaturesExtractor):
             ),  # NOTE: features_dim = 10 to match action space output
         )
 
+def press(action, keys, self):
+    #For pressing keys
+    key_mask = np.array(self.act_helper.press_keys(keys), dtype=action.dtype)
+    return np.maximum(key_mask > 0, action)
 
 class CustomAgent(Agent):
     def __init__(self, file_path: Optional[str] = None):
@@ -430,34 +430,14 @@ class CustomAgent(Agent):
     def predict(self, obs):
         self.time += 1
         pos = self.obs_helper.get_section(obs, "player_pos")
+        weapon = self.obs_helper.get_section(obs, "player_weapon_type")
         opp_pos = self.obs_helper.get_section(obs, "opponent_pos")
         opp_KO = self.obs_helper.get_section(obs, "opponent_state") in [5, 11]
         action = self.act_helper.zeros()
-
-        # If off the edge, come back
-        if pos[0] > 10.67 / 2:
-            action = self.act_helper.press_keys(["a"])
-        elif pos[0] < -10.67 / 2:
-            action = self.act_helper.press_keys(["d"])
-        elif (not opp_KO and opp_pos[1] < 3):
-            # Head toward opponent
-            if (opp_pos[0] > pos[0]):
-                action = self.act_helper.press_keys(['d'])
-            else:
-                action = self.act_helper.press_keys(['a'])
-        else:
-            if (pos[0] < 0 and pos[0]>-6):
-                action = self.act_helper.press_keys(["a"])
-            if (pos[0] > 0 and pos[0]<6):
-                action = self.act_helper.press_keys(["d"])
-
-        # Note: Passing in partial action
-        # Jump if below map or opponent is above you
-        if (pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0:
-            action = self.act_helper.press_keys(["space"], action)
-
+        still_in_air = False
+        
         # Attack if near
-        if (pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 4.0:
+        if ((pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 4.0) and not opp_KO and pos[0] > -7 and pos[0] < 7:
             skill_name = "combat"
             # Switch to the selected skill
             if skill_name in self.skills:
@@ -477,6 +457,41 @@ class CustomAgent(Agent):
                 deterministic=True,
             )
             self.episode_starts = np.zeros((1,), dtype=bool)
+
+            # Block "g"
+            g_mask = np.array(self.act_helper.press_keys(["g"]), dtype=action.dtype)
+            action = np.where(g_mask > 0, 0, action)
+
+            # Block "h" 
+            if weapon != [0.]:
+                h_mask = np.array(self.act_helper.press_keys(["h"]), dtype=action.dtype)
+                action = np.where(h_mask > 0, 0, action)
+            else:
+                if (self.time%2 == 0):
+                    action = press(action,["h"],self)
+        else:
+            #Pick up weapon
+            if weapon == [0.] and self.time % 2 == 0:
+                action = press(action,["h"],self)
+
+            if pos[0] > 10.67 / 2:
+                action = press(action,['a'],self)
+            elif pos[0] < -10.67 / 2:
+                action = press(action,["d"],self)
+            elif (not opp_KO and opp_pos[1] < 3):
+                # Head toward opponent
+                if (opp_pos[0] > pos[0]):
+                    action = press(action,["d"],self)
+                else:
+                    action = press(action,["a"],self)
+            else:
+                action = press(action,["a"],self)
+
+
+            # Note: Passing in partial action
+            # Jump if below map or opponent is above you
+            if ((pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0):
+                action = press(action,["space"],self)
 
         return action
 
