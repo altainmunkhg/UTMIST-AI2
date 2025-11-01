@@ -17,6 +17,7 @@ import torch
 import gymnasium as gym
 from torch.nn import functional as F
 from torch import nn as nn
+from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 import pygame
 from stable_baselines3 import A2C, PPO, SAC, DQN, DDPG, TD3, HER
@@ -35,6 +36,8 @@ else:
     torch.set_default_device("cpu")
 
 print(f"Using device {torch.get_default_device()}")
+
+writer = SummaryWriter()
 
 # -------------------------------------------------------------------------
 # ----------------------------- AGENT CLASSES -----------------------------
@@ -67,6 +70,7 @@ class SB3Agent(Agent):
                 n_steps=30 * 90 * 3,
                 batch_size=256,
                 ent_coef=0.01,
+                tensorboard_log=f"./runs_sb3/{run_name}",
             )
             del self.env
         else:
@@ -111,7 +115,7 @@ class RecurrentPPOAgent(Agent):
             policy_kwargs = {
                 "activation_fn": nn.ReLU,
                 "lstm_hidden_size": 512,
-                "net_arch": [dict(pi=[128, 128], vf=[128, 128])],
+                "net_arch": [dict(pi=[512, 512], vf=[512, 512])],
                 "shared_lstm": True,
                 "enable_critic_lstm": False,
                 "share_features_extractor": True,
@@ -119,9 +123,9 @@ class RecurrentPPOAgent(Agent):
             self.model = RecurrentPPO(
                 "MlpLstmPolicy",
                 self.env,
-                verbose=0,
-                n_steps=30 * 90 * 10,
-                batch_size=64,
+                verbose=1,
+                n_steps=2048,
+                batch_size=256,
                 ent_coef=0.01,
                 gamma=0.995,
                 learning_rate=3e-4,
@@ -140,7 +144,7 @@ class RecurrentPPOAgent(Agent):
             obs,
             state=self.lstm_states,
             episode_start=self.episode_starts,
-            deterministic=True,
+            deterministic=False,  # TODO tweak to True when running pvp_match but False when training
         )
         if self.episode_starts:
             self.episode_starts = False
@@ -604,34 +608,39 @@ Add your dictionary of RewardFunctions here using RewTerms
 def gen_reward_manager():
     reward_functions = {
         #'target_height_reward': RewTerm(func=base_height_l2, weight=0.0, params={'target_height': -4, 'obj_name': 'player'}),
-        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight=0.5),
+        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight=3.0),
         "damage_interaction_reward": RewTerm(
-            func=damage_interaction_reward, weight=10.0
+            func=damage_interaction_reward, weight=35.0
         ),
-        #'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=0.01),
-        "head_to_opponent": RewTerm(func=head_to_opponent, weight=0.1),
+        "head_to_middle_reward": RewTerm(func=head_to_middle_reward, weight=0.1),
+        "head_to_opponent": RewTerm(func=head_to_opponent, weight=7.0),
         "penalize_attack_reward": RewTerm(
-            func=in_state_reward, weight=-0.1, params={"desired_state": AttackState}
+            func=in_state_reward, weight=-0.5, params={"desired_state": AttackState}
         ),
-        "holding_more_than_3_keys": RewTerm(
-            func=holding_more_than_3_keys, weight=-0.05
+        "holding_more_than_3_keys": RewTerm(func=holding_more_than_3_keys, weight=-0.2),
+        "taunt_reward": RewTerm(  # taunt is useless
+            func=in_state_reward,
+            weight=-0.3,
+            params={"desired_state": TauntState},
         ),
-        #'taunt_reward': RewTerm(func=in_state_reward, weight=0.2, params={'desired_state': TauntState}),
     }
     signal_subscriptions = {
-        "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=50)),
+        "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=300)),
         "on_knockout_reward": (
             "knockout_signal",
-            RewTerm(func=on_knockout_reward, weight=8),
+            RewTerm(func=on_knockout_reward, weight=75),
         ),
-        "on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=5)),
+        "on_combo_reward": (
+            "hit_during_stun",
+            RewTerm(func=on_combo_reward, weight=20),
+        ),
         "on_equip_reward": (
             "weapon_equip_signal",
-            RewTerm(func=on_equip_reward, weight=10),
+            RewTerm(func=on_equip_reward, weight=25),
         ),
         "on_drop_reward": (
             "weapon_drop_signal",
-            RewTerm(func=on_drop_reward, weight=15),
+            RewTerm(func=on_drop_reward, weight=35),
         ),
     }
     return RewardManager(reward_functions, signal_subscriptions)
@@ -648,8 +657,12 @@ if __name__ == "__main__":
     # Start here if you want to train from scratch. e.g:
     my_agent = SB3Agent()
 
+    run_name = "SB3_PPO_3"
+
     # Start here if you want to train from a specific timestep. e.g:
-    # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_324000_steps")
+    # my_agent = RecurrentPPOAgent(
+    #     file_path="checkpoints/SB3_PPO_3/rl_model_900009_steps"
+    # )
 
     # Reward manager
     reward_manager = gen_reward_manager()
@@ -669,16 +682,15 @@ if __name__ == "__main__":
         save_freq=100_000,  # Save frequency
         max_saved=40,  # Maximum number of saved models
         save_path="checkpoints",  # Save path
-        run_name="SB3_PPO_3",  # Run name
+        run_name=run_name,  # Run name
         mode=SaveHandlerMode.FORCE,  # Save mode, FORCE or RESUME
     )
 
     # Set opponent settings here:
     opponent_specification = {
         # "self_play": (8, selfplay_handler),
-        # "self_play_latest": (8, self_play_latest_manager),
-        "self_play": (4, self_play_random_manager),
-        "self_play": (4, self_play_latest_manager),
+        "self_play_random": (2, self_play_random_manager),
+        "self_play_latest": (8, self_play_latest_manager),
         #'constant_agent': (0.5, partial(ConstantAgent)),
         # "based_agent": (1.5, partial(BasedAgent)),
     }
@@ -690,6 +702,6 @@ if __name__ == "__main__":
         save_handler,
         opponent_cfg,
         CameraResolution.LOW,
-        train_timesteps=1_000_000,
+        train_timesteps=1_000_000_000,
         train_logging=TrainLogging.PLOT,
     )

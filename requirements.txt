@@ -23,6 +23,8 @@ scikit-video==1.1.11
 scipy
 stable_baselines3==2.5.0
 sympy==1.5.1
+tensorboard
+tensorflow
 torch==2.4.1
 tqdm==4.67.1
 transformers==4.48.2

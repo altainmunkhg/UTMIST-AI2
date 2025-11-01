@@ -40,3 +40,8 @@ env/
 ai2/
 # Local scratch
 path/
+
+# runs
+
+runs/
+runs_sb3/

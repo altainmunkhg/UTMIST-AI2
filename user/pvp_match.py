@@ -13,7 +13,7 @@ import pygame
 
 pygame.init()
 
-steps = 1_000_010
+steps = 9_000_090
 
 my_agent = UserInputAgent()
 
