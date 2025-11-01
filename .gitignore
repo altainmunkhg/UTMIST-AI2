@@ -40,3 +40,4 @@ env/
 ai2/
 # Local scratch
 path/
+ai2-venv/

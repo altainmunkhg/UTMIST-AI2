@@ -13,7 +13,7 @@ on:
 jobs:
   check-inputs:
     name: Validate Inputs
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Validate usernames
         run: |
@@ -23,15 +23,13 @@ jobs:
 
   battle:
     name: Battle
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: check-inputs
     container:
       image: python:3.10
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-
     steps:
       # Step 1: Checkout the main repo
       - name: Checkout main repo
@@ -42,8 +40,9 @@ jobs:
       # Step 2: Install dependencies
       - name: Install dependencies
         run: |
-          chmod +x install.sh
-          ./install.sh
+          chmod +x install_tt.sh
+          ./install_tt.sh
+
       # Step 3: Check both participants have passed validation (via api.py)
       - name: Check participants' validation status server-side
         id: check-validation
