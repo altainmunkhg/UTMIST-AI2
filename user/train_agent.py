@@ -74,7 +74,7 @@ class SB3Agent(Agent):
 
     def _gdown(self) -> str:
         # Call gdown to your link
-        return ""
+        return
 
     # def set_ignore_grad(self) -> None:
     # self.model.set_ignore_act_grad(True)
@@ -126,9 +126,6 @@ class RecurrentPPOAgent(Agent):
                 gamma=0.995,
                 learning_rate=3e-4,
                 n_epochs=10,
-                n_steps=90 * 3,
-                batch_size=256,
-                ent_coef=0.001,
                 policy_kwargs=policy_kwargs,
             )
             del self.env
@@ -188,7 +185,7 @@ class BasedAgent(Agent):
             else:
                 action = self.act_helper.press_keys(['a'])
 
-            #Head away from opponent
+            #Head away from opponent 
             #if (opp_pos[0] > pos[0]) and (pos[0] < 7):
             #    action = self.act_helper.press_keys(["a"])
             #elif (opp_pos[0] < pos[0]) and (pos[0] > -7):
@@ -363,7 +360,7 @@ class CustomAgent(Agent):
             "recovery": 'checkpoints/Hierarch_Experiment_2_Movement/rl_model_12142434_steps',
             "default": 'checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4005109_steps',
         }
-
+        
         #Go through and make sure each skill can be loaded
         for name, path in skills.items():
             try:
@@ -462,7 +459,9 @@ class RewardMode(Enum):
 
 
 def damage_interaction_reward(
-    env: WarehouseBrawl) -> float:
+    env: WarehouseBrawl,
+    mode: RewardMode = RewardMode.ASYMMETRIC_OFFENSIVE,
+) -> float:
     """
     Computes the reward based on damage interactions between players.
 
@@ -501,6 +500,7 @@ def damage_interaction_reward(
     return reward / 140
 
 
+
 # In[ ]:
 
 
@@ -529,7 +529,7 @@ def danger_zone_reward(
 
 def in_state_reward(
     env: WarehouseBrawl,
-    desired_state: Type[PlayerObjectState] = TauntState,
+    desired_state: Type[PlayerObjectState] = AttackState,
 ) -> float:
     """
     Applies a penalty for every time frame player surpases a certain height threshold in the environment.
@@ -548,7 +548,7 @@ def in_state_reward(
     # Apply penalty if the player is in the danger zone
     reward = 1 if isinstance(player.state, desired_state) else 0.0
 
-    return reward
+    return reward 
 
 
 def head_to_middle_reward(
@@ -583,7 +583,6 @@ def head_to_opponent(
     player: Player = env.objects["player"]
     opponent: Player = env.objects["opponent"]
 
-    # Apply penalty if the player is in the danger zone
     multiplier = -1 if player.body.position.x > opponent.body.position.x else 1
     if player.stocks > opponent.stocks:
         reward = multiplier * (player.body.position.x - player.prev_x)
@@ -593,16 +592,31 @@ def head_to_opponent(
         elif player.damage_taken_this_stock < opponent.damage_taken_this_stock:
             reward = multiplier * (player.body.position.x - player.prev_x)
         else:
-            if abs(player.body.position.x - opponent.body.position.x) == 1:
-                reward = 15
+            if abs(player.body.position.x - opponent.body.position.x) == 0.5:
+                reward = 1.5
             else:
                 reward = multiplier * (player.body.position.x - player.prev_x)
     else:
-        if abs(player.body.position.x - opponent.body.position.x) == 1:
-            reward = 20
+        if abs(player.body.position.x - opponent.body.position.x) == 0.5:
+            reward = 2.0
         else:
             reward = multiplier * (player.body.position.x - player.prev_x)
 
+    return reward
+
+def punish_no_movement_reward(
+    env: WarehouseBrawl) -> float:
+
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+
+    reward = 0
+    if abs(player.body.position.x - opponent.body.position.x) > 1:
+        reward = -1
+    if abs(player.body.velocity.x) < 2:
+        reward = -2
+    else:
+        reward = 0.5
     return reward
 
 def near_opp_defensive_reward(
@@ -613,19 +627,30 @@ def near_opp_defensive_reward(
     player: Player = env.objects["player"]
     opponent: Player = env.objects["opponent"]
 
-    # Apply penalty if the player is in the danger zone
-    reward = 0.0
+
     if player.stocks > opponent.stocks:
-        reward = 10
+        reward = 1.0
     elif player.stocks == opponent.stocks:
         if abs(player.damage_taken_this_stock - opponent.damage_taken_this_stock) <= 30.0:
-            reward = 7
+            reward = 0.7
         elif player.damage_taken_this_stock < opponent.damage_taken_this_stock:
-            reward = 7
+            reward = 0.7
         else:
-            reward = 5 * (player.body.position.y - opponent.body.position.y)
+            reward = 0.5 * (player.body.position.y - opponent.body.position.y)
     else:
-        reward =  5 * (player.body.position.y - opponent.body.position.y)
+        reward =  0.5 * (player.body.position.y - opponent.body.position.y)
+    return reward
+
+def weapon_holding_behaviour_reward(env: WarehouseBrawl) -> float:
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+
+    reward = 0.0
+    if player.weapon != "Punch":
+        if abs(player.body.position.x - opponent.body.position.x) <= 2:
+            reawrd = 2.0
+        else:
+            reward = -1.0
     return reward
 
 
@@ -642,18 +667,6 @@ def holding_more_than_3_keys(
         return env.dt
     return 0
 
-def weapon_holding_behaviour_reward(env: WarehouseBrawl) -> float:
-    player: Player = env.objects["player"]
-    opponent: Player = env.objects["opponent"]
-    reward = 0.0
-    if player.weapon != "Punch":
-        if abs(player.body.position.x - opponent.body.position.x) <= 2:
-            reward = 20
-        else:
-            reward = -10
-    else:
-        reward = 0
-    return reward
 
 def on_win_reward(env: WarehouseBrawl, agent: str) -> float:
     if agent == "player":
@@ -720,9 +733,9 @@ def attack_miss_reward(
     opponent: Player = env.objects["opponent"]
 
     if (opponent.damage_taken_this_frame > 0 and isinstance(player.state, AttackState)):
-        return 30
-    return -1/30
-
+        return 3
+    return -5
+    
 def near_edge_penalty(
     env: WarehouseBrawl,
 ) -> float:
@@ -734,7 +747,7 @@ def near_edge_penalty(
 
     if player.body.position.x < -6.5 or (player.body.position.x > -2.5 and player.body.position.x < 2.5) or player.body.position.x > 6.5:
         return 1
-    return 0
+    return -0.5
 
 def speed_reward(
     env: WarehouseBrawl,
@@ -745,46 +758,36 @@ def speed_reward(
     # Get player object from the environment
     player: Player = env.objects["player"]
 
-    speed = player.body.angular_velocity
+    speed = player.body.angular_velocity 
     return speed / 10
 """
 Add your dictionary of RewardFunctions here using RewTerms
 """
 
-
 def gen_reward_manager():
     reward_functions = {
-        'target_height_reward': RewTerm(func=base_height_l2, weight=0.0, params={'target_height': -4, 'obj_name': 'player'}),
-        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight=0.5),
-        "damage_interaction_reward": RewTerm(
-            func=damage_interaction_reward, weight=10.0
-        ), 'near_opp_defensive_reward': RewTerm(func=near_opp_defensive_reward, weight=0.5),
-        'weapon_holding_behaviour_reward': RewTerm(func=weapon_holding_behaviour_reward, weight=0.1),
-        'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=0.01),
-        "head_to_opponent": RewTerm(func=head_to_opponent, weight=0.1),
-        "penalize_attack_reward": RewTerm(
-            func=in_state_reward, weight=-0.1, params={"desired_state": AttackState}
-        ),
-        "holding_more_than_3_keys": RewTerm(
-            func=holding_more_than_3_keys, weight=-0.05
-        ),
-        'taunt_reward': RewTerm(func=in_state_reward, weight=0.2, params={'desired_state': TauntState}),
+        'target_height_reward': RewTerm(func=base_height_l2, weight=1, params={'target_height': -4, 'obj_name': 'player'}),
+        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight = 15),
+        "damage_interaction_reward": RewTerm(func=damage_interaction_reward, weight=10),
+        'near_opp_defensive_reward': RewTerm(func=near_opp_defensive_reward, weight=3),
+        'weapn_holding_behaviour_reward': RewTerm(func=weapon_holding_behaviour_reward, weight=0.5),
+        'punish_no_movement_reawrd': RewTerm(func=punish_no_movement_reward, weight=15),
+        'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=-0.1),
+        "head_to_opponent": RewTerm(func=head_to_opponent, weight=15),
+        "holding_more_than_3_keys": RewTerm(func=holding_more_than_3_keys, weight=-0.05),
+        'attack_reward': RewTerm(func=in_state_reward, weight= -1, params={'desired_state': AttackState}),
+        'taunt_reward': RewTerm(func=in_state_reward, weight=-1),
+        'face_opponent_reward': RewTerm(func=face_opponent_reward, weight=5),
+        "attack_miss_reward": RewTerm(func=attack_miss_reward, weight = 10),
+        "near_edge_penalty": RewTerm(func=near_edge_penalty, weight=-5),
+        "speed_reward": RewTerm(func=speed_reward, weight=2),
     }
     signal_subscriptions = {
         "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=50)),
-        "on_knockout_reward": (
-            "knockout_signal",
-            RewTerm(func=on_knockout_reward, weight=8),
-        ),
-        "on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=5)),
-        "on_equip_reward": (
-            "weapon_equip_signal",
-            RewTerm(func=on_equip_reward, weight=10),
-        ),
-        "on_drop_reward": (
-            "weapon_drop_signal",
-            RewTerm(func=on_drop_reward, weight=15),
-        ),
+        "on_knockout_reward": ("knockout_signal",RewTerm(func=on_knockout_reward, weight=25),),
+        "on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=1)),
+        "on_equip_reward": ("weapon_equip_signal",RewTerm(func=on_equip_reward, weight=5),),
+        "on_drop_reward": ("weapon_drop_signal",RewTerm(func=on_drop_reward, weight=10),),
     }
     return RewardManager(reward_functions, signal_subscriptions)
 
@@ -798,7 +801,7 @@ The main function runs training. You can change configurations such as the Agent
 if __name__ == "__main__":
     # Create agent
     # Start here if you want to train from scratch. e.g:
-    my_agent = RecurrentPPOAgent(file_path="checkpoints/SB3_PPO_3/rl_model_216000_steps")
+    my_agent = RecurrentPPOAgent(file_path='checkpoints/Hierarch_Experiment_2_Movement/rl_model_2436530_steps')
 
     # Start here if you want to train from a specific timestep. e.g:
     # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_324000_steps")
@@ -807,10 +810,9 @@ if __name__ == "__main__":
     reward_manager = gen_reward_manager()
 
     #Self-play settings
-    #selfplay_handler = SelfPlayRandom(
-    #    partial(type(my_agent)),  # Agent class and its keyword arguments
-        # type(my_agent) = Agent class
-    #)
+    selfplay_handler = SelfPlayRandom(
+        partial(type(my_agent)))
+
 
     # Set save settings here:
     save_handler = SaveHandler(
@@ -824,8 +826,8 @@ if __name__ == "__main__":
 
     # Set opponent settings here:
     opponent_specification = {
-        #"self_play": (1, selfplay_handler),
-        'based_agent': (9, partial(BasedAgent)),
+        "self_play": (1, selfplay_handler),
+        #'based_agent': (9, partial(BasedAgent)),
 
     }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
@@ -836,6 +838,6 @@ if __name__ == "__main__":
         save_handler,
         opponent_cfg,
         CameraResolution.LOW,
-        train_timesteps=500_000,
+        train_timesteps=50_000_000,
         train_logging=TrainLogging.PLOT,
     )
