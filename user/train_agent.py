@@ -130,6 +130,7 @@ class RecurrentPPOAgent(Agent):
                 gamma=0.995,
                 learning_rate=3e-4,
                 n_epochs=10,
+                tensorboard_log="./runs_sb3",
                 policy_kwargs=policy_kwargs,
             )
             del self.env
@@ -775,14 +776,11 @@ The main function runs training. You can change configurations such as the Agent
 """
 if __name__ == "__main__":
     # Create agent
-    # Start here if you want to train from scratch. e.g:
-    my_agent = RecurrentPPOAgent()
-
+    steps = "50005"
     run_name = "SB3_PPO_3"
-
-    # Start here if you want to train from a specific timestep. e.g:
+    my_agent = RecurrentPPOAgent()
     # my_agent = RecurrentPPOAgent(
-    #     file_path="checkpoints/SB3_PPO_3/rl_model_900009_steps"
+    #     file_path=f"checkpoints/{run_name}/rl_model_{steps}_steps"
     # )
 
     # Reward manager
@@ -794,7 +792,7 @@ if __name__ == "__main__":
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent,  # Agent to save
-        save_freq=200_000,  # Save frequency
+        save_freq=10_000,  # Save frequency
         max_saved=40,  # Maximum number of saved models
         save_path="checkpoints",  # Save path
         run_name=run_name,
@@ -817,6 +815,6 @@ if __name__ == "__main__":
         save_handler,
         opponent_cfg,
         CameraResolution.LOW,
-        train_timesteps=10_000_000,
+        train_timesteps=1_000_000,
         train_logging=TrainLogging.PLOT,
     )
