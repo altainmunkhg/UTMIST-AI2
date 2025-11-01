@@ -128,10 +128,10 @@ class RecurrentPPOAgent(Agent):
                 verbose=1,
                 n_steps=30 * 90 * 3,
                 batch_size=128,
-                ent_coef=0.003,
+                ent_coef=0.01,
                 gamma=0.995,
-                learning_rate=1e-4,
-                n_epochs=10,
+                # learning_rate=1e-4,
+                # n_epochs=10,
                 tensorboard_log="./runs_sb3",
                 policy_kwargs=policy_kwargs,
             )
