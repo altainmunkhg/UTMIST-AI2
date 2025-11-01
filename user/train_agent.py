@@ -130,9 +130,6 @@ class RecurrentPPOAgent(Agent):
                 gamma=0.995,
                 learning_rate=3e-4,
                 n_epochs=10,
-                n_steps=90 * 3,
-                batch_size=256,
-                ent_coef=0.001,
                 policy_kwargs=policy_kwargs,
             )
             del self.env
@@ -779,9 +776,7 @@ The main function runs training. You can change configurations such as the Agent
 if __name__ == "__main__":
     # Create agent
     # Start here if you want to train from scratch. e.g:
-    my_agent = RecurrentPPOAgent(
-        file_path="checkpoints/Hierarch_Experiment_2_Movement/rl_model_11640234_steps"
-    )
+    my_agent = RecurrentPPOAgent()
 
     run_name = "SB3_PPO_3"
 
@@ -793,11 +788,8 @@ if __name__ == "__main__":
     # Reward manager
     reward_manager = gen_reward_manager()
 
-    # Self-play settings
-    # selfplay_handler = SelfPlayRandom(
-    #    partial(type(my_agent)),  # Agent class and its keyword arguments
-    # type(my_agent) = Agent class
-    # )
+    self_play_random_handler = SelfPlayRandom(partial(type(my_agent)))
+    self_play_latest_handler = SelfPlayLatest(partial(type(my_agent)))
 
     # Set save settings here:
     save_handler = SaveHandler(
@@ -805,15 +797,15 @@ if __name__ == "__main__":
         save_freq=200_000,  # Save frequency
         max_saved=40,  # Maximum number of saved models
         save_path="checkpoints",  # Save path
-        run_name="Hierarch_Experiment_2_Movement",  # Run names
+        run_name=run_name,
         mode=SaveHandlerMode.FORCE,  # Save mode, FORCE or RESUME
     )
 
     # Set opponent settings here:
     opponent_specification = {
         # "self_play": (8, selfplay_handler),
-        "self_play_random": (2, self_play_random_manager),
-        "self_play_latest": (8, self_play_latest_manager),
+        "self_play_random": (2, self_play_random_handler),
+        "self_play_latest": (8, self_play_latest_handler),
         #'constant_agent': (0.5, partial(ConstantAgent)),
         # "based_agent": (1.5, partial(BasedAgent)),
     }

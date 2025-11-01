@@ -40,12 +40,8 @@ env/
 ai2/
 # Local scratch
 path/
-<<<<<<< HEAD
 
 # runs
 
 runs/
 runs_sb3/
-=======
-ai2-venv/
->>>>>>> main
