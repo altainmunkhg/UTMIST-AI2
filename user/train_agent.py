@@ -478,28 +478,28 @@ class CustomAgent(Agent):
             else:
                 if (self.time%2 == 0):
                     action = press(action,["h"],self)
-        
-        #Pick up weapon
-        if weapon == [0.] and self.time % 2 == 0:
-            action = press(action,["h"],self)
+        else:
+            #Pick up weapon
+            if weapon == [0.] and self.time % 2 == 0:
+                action = press(action,["h"],self)
 
-        if pos[0] > 10.67 / 2:
-            action = press(action,['a'],self)
-        elif pos[0] < -10.67 / 2:
-            action = press(action,["d"],self)
-        elif (not opp_KO and opp_pos[1] < 3):
-            # Head toward opponent
-            if (opp_pos[0] > pos[0]):
+            if pos[0] > 10.67 / 2:
+                action = press(action,['a'],self)
+            elif pos[0] < -10.67 / 2:
                 action = press(action,["d"],self)
+            elif (not opp_KO and opp_pos[1] < 3):
+                # Head toward opponent
+                if (opp_pos[0] > pos[0]):
+                    action = press(action,["d"],self)
+                else:
+                    action = press(action,["a"],self)
             else:
                 action = press(action,["a"],self)
-        else:
-            action = press(action,["a"],self)
 
-        # Note: Passing in partial action
-        # Jump if below map or opponent is above you
-        if ((pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0):
-            action = press(action,["space"],self)
+            # Note: Passing in partial action
+            # Jump if below map or opponent is above you
+            if ((pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0):
+                action = press(action,["space"],self)
 
         if self.episode_starts:
             self.episode_starts = False
@@ -509,6 +509,8 @@ class CustomAgent(Agent):
             action = np.where(s_mask > 0, 0, action)
             
         if (pos[0] > -2 and pos[0] < 2) and player_jumps_left == 0:
+            d_mask = np.array(self.act_helper.press_keys(["d"]), dtype=action.dtype)
+            action = np.where(d_mask > 0, 0, action)
             action = press(action,["a"],self)
         return action
     
@@ -584,7 +586,7 @@ def damage_interaction_reward(
     if mode == RewardMode.ASYMMETRIC_OFFENSIVE:
         reward = damage_dealt
     elif mode == RewardMode.SYMMETRIC:
-        reward = damage_dealt - damage_taken
+        reward = damage_dealt - 0.75*damage_taken
     elif mode == RewardMode.ASYMMETRIC_DEFENSIVE:
         reward = -damage_taken
     else:
@@ -837,7 +839,7 @@ def gen_reward_manager():
         #"speed_reward": RewTerm(func=speed_reward, weight=0.05),
         #'away_from_stage_reward': RewTerm(func=away_from_stage, weight= -1.0),
         #'staying_still': RewTerm(func=staying_still, weight= -0.1)
-        'ground_pound_reward': RewTerm(func=ground_pound_reward,weight=3)
+        #'ground_pound_reward': RewTerm(func=ground_pound_reward,weight=3)
     }
     signal_subscriptions = {
         "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=10)),
@@ -858,7 +860,7 @@ The main function runs training. You can change configurations such as the Agent
 if __name__ == "__main__":
     # Create agent
     # Start here if you want to train from scratch. e.g:
-    my_agent = CustomAgent(file_path="checkpoints/Custom_Experiment_1/rl_model_7233300_steps")
+    my_agent = CustomAgent(file_path="checkpoints/Custom_Experiment_1/rl_model_8237700_steps")
 
     # Start here if you want to train from a specific timestep. e.g:
     # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_324000_steps")
@@ -880,7 +882,7 @@ if __name__ == "__main__":
         save_freq=100_000,  # Save frequency
         max_saved=40,  # Maximum number of saved models
         save_path="checkpoints",  # Save path
-        run_name="Custom_Experiment_1",  # Run names
+        run_name="Custom_Experiment2",  # Run names
         mode=SaveHandlerMode.RESUME,  # Save mode, FORCE or RESUME
     )
 
@@ -888,7 +890,7 @@ if __name__ == "__main__":
     opponent_specification = {
         "self_play": (5, selfplay_handler),
         'based_agent': (4, partial(BasedAgent)),
-        'constant_agent': (1,partial(ConstantAgent)),
+        'constant_agent': (0.1,partial(ConstantAgent)),
         #'custom_agent': (3,CustomAgent(file_path='checkpoints/Custom_Experiment_1/rl_model_7228910_steps.zip')),
     }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
@@ -899,6 +901,6 @@ if __name__ == "__main__":
         save_handler,
         opponent_cfg,
         CameraResolution.LOW,
-        train_timesteps=1_000_000,
+        train_timesteps=100_000,
         train_logging=TrainLogging.PLOT,
     )
