@@ -39,6 +39,8 @@ print(f"Using device {torch.get_default_device()}")
 
 writer = SummaryWriter()
 
+run_name = "SB3_PPO_3"
+
 # -------------------------------------------------------------------------
 # ----------------------------- AGENT CLASSES -----------------------------
 # -------------------------------------------------------------------------
@@ -114,8 +116,8 @@ class RecurrentPPOAgent(Agent):
         if self.file_path is None:
             policy_kwargs = {
                 "activation_fn": nn.ReLU,
-                "lstm_hidden_size": 512,
-                "net_arch": [dict(pi=[512, 512], vf=[512, 512])],
+                "lstm_hidden_size": 256,
+                "net_arch": [dict(pi=[128, 128], vf=[128, 128])],
                 "shared_lstm": True,
                 "enable_critic_lstm": False,
                 "share_features_extractor": True,
@@ -124,11 +126,11 @@ class RecurrentPPOAgent(Agent):
                 "MlpLstmPolicy",
                 self.env,
                 verbose=1,
-                n_steps=2048,
-                batch_size=256,
-                ent_coef=0.01,
+                n_steps=30 * 90 * 3,
+                batch_size=128,
+                ent_coef=0.003,
                 gamma=0.995,
-                learning_rate=3e-4,
+                learning_rate=1e-4,
                 n_epochs=10,
                 tensorboard_log="./runs_sb3",
                 policy_kwargs=policy_kwargs,
@@ -727,42 +729,44 @@ def gen_reward_manager():
     reward_functions = {
         "target_height_reward": RewTerm(
             func=base_height_l2,
-            weight=7.0,
+            weight=1.0,
             params={"target_height": -4, "obj_name": "player"},
         ),
-        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight=3.0),
+        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight=0.5),
         "damage_interaction_reward": RewTerm(
-            func=damage_interaction_reward, weight=35.0
+            func=damage_interaction_reward, weight=1.0
         ),
-        "head_to_middle_reward": RewTerm(func=head_to_middle_reward, weight=0.1),
-        "head_to_opponent": RewTerm(func=head_to_opponent, weight=7.0),
+        "head_to_middle_reward": RewTerm(func=head_to_middle_reward, weight=0.05),
+        "head_to_opponent": RewTerm(func=head_to_opponent, weight=1.0),
         "penalize_attack_reward": RewTerm(
-            func=in_state_reward, weight=-0.5, params={"desired_state": AttackState}
+            func=in_state_reward, weight=-0.1, params={"desired_state": AttackState}
         ),
-        "holding_more_than_3_keys": RewTerm(func=holding_more_than_3_keys, weight=-0.2),
-        "taunt_reward": RewTerm(  # taunt is useless
+        "holding_more_than_3_keys": RewTerm(
+            func=holding_more_than_3_keys, weight=-0.05
+        ),
+        "taunt_reward": RewTerm(
             func=in_state_reward,
-            weight=-0.3,
+            weight=-0.02,
             params={"desired_state": TauntState},
         ),
     }
     signal_subscriptions = {
-        "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=300)),
+        "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=4.0)),
         "on_knockout_reward": (
             "knockout_signal",
-            RewTerm(func=on_knockout_reward, weight=75),
+            RewTerm(func=on_knockout_reward, weight=1.0),
         ),
         "on_combo_reward": (
             "hit_during_stun",
-            RewTerm(func=on_combo_reward, weight=20),
+            RewTerm(func=on_combo_reward, weight=0.5),
         ),
         "on_equip_reward": (
             "weapon_equip_signal",
-            RewTerm(func=on_equip_reward, weight=25),
+            RewTerm(func=on_equip_reward, weight=0.5),
         ),
         "on_drop_reward": (
             "weapon_drop_signal",
-            RewTerm(func=on_drop_reward, weight=35),
+            RewTerm(func=on_drop_reward, weight=0.5),
         ),
     }
     return RewardManager(reward_functions, signal_subscriptions)
@@ -777,7 +781,6 @@ The main function runs training. You can change configurations such as the Agent
 if __name__ == "__main__":
     # Create agent
     steps = "50005"
-    run_name = "SB3_PPO_3"
     my_agent = RecurrentPPOAgent()
     # my_agent = RecurrentPPOAgent(
     #     file_path=f"checkpoints/{run_name}/rl_model_{steps}_steps"
@@ -792,8 +795,8 @@ if __name__ == "__main__":
     # Set save settings here:
     save_handler = SaveHandler(
         agent=my_agent,  # Agent to save
-        save_freq=10_000,  # Save frequency
-        max_saved=40,  # Maximum number of saved models
+        save_freq=100_000,  # Save frequency
+        max_saved=10_000,  # Maximum number of saved models
         save_path="checkpoints",  # Save path
         run_name=run_name,
         mode=SaveHandlerMode.FORCE,  # Save mode, FORCE or RESUME
