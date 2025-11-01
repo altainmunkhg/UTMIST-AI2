@@ -23,11 +23,12 @@ jobs:
     runs-on: self-hosted
     container:
       image: python:3.10
+      volumes:
+        - /home/ambrose/TT/tt-metal:/home/ambrose/TT/tt-metal
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-
     steps:
       # === Step 0: Install dependencies (git + unzip) ===
       - name: Install required tools
@@ -52,9 +53,11 @@ jobs:
       # === Step 2: Install submission dependencies ===
       - name: Install dependencies
         working-directory: submission
+        env:
+          TT_ENV_PATH: /home/ambrose/TT/tt-metal
         run: |
-          chmod +x install.sh
-          ./install.sh
+          chmod +x install_tt.sh
+          ./install_tt.sh
 
       # === Step 3: Run validation ===
       - name: Run validation
@@ -62,7 +65,19 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}/submission
           USERNAME: ${{ github.event.inputs.username }}
-        run: pytest -s user/validate.py
+          TT_ENV_PATH: /home/ambrose/TT/tt-metal
+          TT_METAL_HOME: /home/ambrose/TT/tt-metal
+          TT_METAL_RUNTIME_ROOT: /home/ambrose/TT/tt-metal
+        run: |
+          set -e
+          source "$TT_ENV_PATH/python_env/bin/activate"
+          python -V
+          pip -V
+          # optional: export for subprocesses that ignore job env
+          export TT_METAL_HOME="$TT_METAL_HOME"
+          export TT_METAL_RUNTIME_ROOT="$TT_METAL_RUNTIME_ROOT"
+          # run whatever needs the env
+          pytest -s user/validate.py
 
       # === Step 4: Upload results as an artifact ===
       - name: Upload Results

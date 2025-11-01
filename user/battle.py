@@ -7,7 +7,8 @@ from loguru import logger
 import importlib.util
 import os
 import sys
-from environment.agent import run_match, CameraResolution, gen_reward_manager
+from environment.agent import run_match, CameraResolution
+from user.train_agent import gen_reward_manager
 from user.utils import get_participant_elo, update_participant_elo, elo_update
 
 
@@ -71,6 +72,13 @@ def test_agent_batte():
         reward_manager=reward_manager,
         max_timesteps=30 * match_time,
         train_mode=True,
+    )
+
+    # Actually upload the battle video
+    upload_video_to_supabase(
+        video_path="battle.mp4",
+        agent1_username=agent1_username,
+        agent2_username=agent2_username,
     )
 
     new_elo1, new_elo2 = elo_update(
