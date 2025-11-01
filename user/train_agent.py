@@ -839,7 +839,7 @@ def gen_reward_manager():
         #"speed_reward": RewTerm(func=speed_reward, weight=0.05),
         #'away_from_stage_reward': RewTerm(func=away_from_stage, weight= -1.0),
         #'staying_still': RewTerm(func=staying_still, weight= -0.1)
-        #'ground_pound_reward': RewTerm(func=ground_pound_reward,weight=3)
+        'ground_pound_reward': RewTerm(func=ground_pound_reward,weight=3)
     }
     signal_subscriptions = {
         "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=10)),

@@ -15,17 +15,17 @@ import pygame
 
 pygame.init()
 
-#my_agent = UserInputAgent()
-#my_agent = SubmittedAgent(file_path="checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4003419_steps.zip")
+my_agent = UserInputAgent()
+my_agent = SubmittedAgent(file_path="checkpoints/rl_model_2436530_steps.zip")
 #my_agent = BasedAgent()
-my_agent = CustomAgent(file_path='checkpoints/Custom_Experiment2/rl_model_9242100_steps.zip')
+#my_agent = CustomAgent(file_path='checkpoints/Custom_Experiment2/rl_model_9242100_steps.zip')
 
 # Input your file path here in SubmittedAgent if you are loading a model:
 #opponent = SubmittedAgent(file_path='checkpoints/Hierarch_Experiment_4_combat/rl_model_18954000_steps.zip')
 #opponent = BasedAgent()
-opponent = CustomAgent(file_path='checkpoints/Custom_Experiment_1/rl_model_4920107_steps.zip')
+opponent = SubmittedAgent(file_path='checkpoints/Custom_Experiment2/rl_model_9242100_steps.zip')
 
-match_time = 999999
+match_time = 99999999
 
 # Run a single real-time match
 run_real_time_match(
