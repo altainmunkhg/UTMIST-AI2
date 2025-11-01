@@ -1436,8 +1436,8 @@ class WarehouseBrawl(MalachiteEnv[np.ndarray, np.ndarray, int]):
         p1_start_pos = [-5, 0] if p1_right else [5, 0]
         p2_start_pos = [5, 0] if p1_right else [-5, 0]
 
-        p1 = Player(self, 0, start_position=p1_start_pos, color=[0, 0, 255, 255])
-        p2 = Player(self, 1, start_position=p2_start_pos, color=[0, 255, 0, 255])
+        p1 = Player(self, 0, start_position=p1_start_pos, color=[0, 255, 255, 255])
+        p2 = Player(self, 1, start_position=p2_start_pos, color=[0, 255, 0, 255]) 
 
         if self.game_mode == GameMode.ATTACK_DEBUG:
             p1.stocks = 99

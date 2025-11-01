@@ -142,6 +142,7 @@ class RecurrentPPOAgent(Agent):
                 policy_kwargs=policy_kwargs,
             )
             del self.env
+
         else:
             self.model = RecurrentPPO.load(self.file_path)
             self.model.ent_coef = 0.01
@@ -224,7 +225,7 @@ class BasedAgent(Agent):
         # Attack if near
         if (pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 4.0:
             if (self.time%2 == 0):
-                action = press(action,["j"],self)
+                action = press(action,['j'],self)
 
         return action
 
@@ -447,10 +448,14 @@ class CustomAgent(Agent):
         self.time += 1
         pos = self.obs_helper.get_section(obs, "player_pos")
         weapon = self.obs_helper.get_section(obs, "player_weapon_type")
+        player_jumps_left = self.obs_helper.get_section(obs, 'player_jumps_left')
         opp_pos = self.obs_helper.get_section(obs, "opponent_pos")
         opp_KO = self.obs_helper.get_section(obs, "opponent_state") in [5, 11]
         action = self.act_helper.zeros()
         
+        #if player_jumps_left == 0 and pos[0] < 2 and pos[0] > -2:
+        #    press(action, ['a'], self)
+
         # Attack if near
         if ((pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 4.0) and not opp_KO and pos[0] > -7 and pos[0] < 7:
 
@@ -473,32 +478,38 @@ class CustomAgent(Agent):
             else:
                 if (self.time%2 == 0):
                     action = press(action,["h"],self)
-        else:
-            #Pick up weapon
-            if weapon == [0.] and self.time % 2 == 0:
-                action = press(action,["h"],self)
+        
+        #Pick up weapon
+        if weapon == [0.] and self.time % 2 == 0:
+            action = press(action,["h"],self)
 
-            if pos[0] > 10.67 / 2:
-                action = press(action,['a'],self)
-            elif pos[0] < -10.67 / 2:
+        if pos[0] > 10.67 / 2:
+            action = press(action,['a'],self)
+        elif pos[0] < -10.67 / 2:
+            action = press(action,["d"],self)
+        elif (not opp_KO and opp_pos[1] < 3):
+            # Head toward opponent
+            if (opp_pos[0] > pos[0]):
                 action = press(action,["d"],self)
-            elif (not opp_KO and opp_pos[1] < 3):
-                # Head toward opponent
-                if (opp_pos[0] > pos[0]):
-                    action = press(action,["d"],self)
-                else:
-                    action = press(action,["a"],self)
             else:
                 action = press(action,["a"],self)
+        else:
+            action = press(action,["a"],self)
 
-
-            # Note: Passing in partial action
-            # Jump if below map or opponent is above you
-            if ((pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0):
-                action = press(action,["space"],self)
+        # Note: Passing in partial action
+        # Jump if below map or opponent is above you
+        if ((pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0):
+            action = press(action,["space"],self)
 
         if self.episode_starts:
             self.episode_starts = False
+
+        if (pos[0] > 7 or pos[0] < -7 or (pos[0] > -2 and pos[0] < 2)):
+            s_mask = np.array(self.act_helper.press_keys(["s"]), dtype=action.dtype)
+            action = np.where(s_mask > 0, 0, action)
+            
+        if (pos[0] > -2 and pos[0] < 2) and player_jumps_left == 0:
+            action = press(action,["a"],self)
         return action
     
     def save(self, file_path: str) -> None:
@@ -797,6 +808,15 @@ def staying_still(env:WarehouseBrawl) -> float:
         return 1
     return 0
 
+def ground_pound_reward(env:WarehouseBrawl)->float:
+    player: Player = env.objects['player']
+    opponent: Player = env.objects["opponent"]
+
+    if player.attack_anims == "algroundpound":
+        return 1
+    return 0
+
+
 """
 Add your dictionary of RewardFunctions here using RewTerms
 """
@@ -805,10 +825,10 @@ def gen_reward_manager():
     reward_functions = {
         #'target_height_reward': RewTerm(func=base_height_l2, weight=0.0, params={'target_height': -4, 'obj_name': 'player'}),
         #"danger_zone_reward": RewTerm(func=danger_zone_reward, weight = 0.05),
-        "damage_interaction_reward": RewTerm(func=damage_interaction_reward, weight=3),
+        "damage_interaction_reward": RewTerm(func=damage_interaction_reward, weight=5),
         #'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=-0.5),
         #"head_to_opponent": RewTerm(func=head_to_opponent, weight=0.5),
-        "holding_more_than_3_keys": RewTerm(func=holding_more_than_3_keys, weight=-0.5),
+        #"holding_more_than_3_keys": RewTerm(func=holding_more_than_3_keys, weight=-0.5),
         #'attack_reward': RewTerm(func=in_state_reward, weight= -1, params={'desired_state': AttackState}),
         #'taunt_reward': RewTerm(func=in_state_reward, weight=-10),
         'face_opponent_reward': RewTerm(func=face_opponent_reward, weight=0.05),
@@ -817,11 +837,12 @@ def gen_reward_manager():
         #"speed_reward": RewTerm(func=speed_reward, weight=0.05),
         #'away_from_stage_reward': RewTerm(func=away_from_stage, weight= -1.0),
         #'staying_still': RewTerm(func=staying_still, weight= -0.1)
+        'ground_pound_reward': RewTerm(func=ground_pound_reward,weight=3)
     }
     signal_subscriptions = {
         "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=10)),
-        "on_knockout_reward": ("knockout_signal",RewTerm(func=on_knockout_reward, weight=7),),
-        #"on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=1)),
+        "on_knockout_reward": ("knockout_signal",RewTerm(func=on_knockout_reward, weight=5),),
+        "on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=3)),
         #"on_equip_reward": ("weapon_equip_signal",RewTerm(func=on_equip_reward, weight=1),),
         #"on_drop_reward": ("weapon_drop_signal",RewTerm(func=on_drop_reward, weight=10),),
     }
@@ -837,7 +858,7 @@ The main function runs training. You can change configurations such as the Agent
 if __name__ == "__main__":
     # Create agent
     # Start here if you want to train from scratch. e.g:
-    my_agent = CustomAgent(file_path="checkpoints/Custom_Experiment_1/rl_model_202500_steps")
+    my_agent = CustomAgent(file_path="checkpoints/Custom_Experiment_1/rl_model_7233300_steps")
 
     # Start here if you want to train from a specific timestep. e.g:
     # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_324000_steps")
@@ -865,9 +886,10 @@ if __name__ == "__main__":
 
     # Set opponent settings here:
     opponent_specification = {
-        #"self_play": (2, selfplay_handler),
-        'based_agent': (10, partial(BasedAgent)),
-        #'constant_agent': (5,partial(ConstantAgent))
+        "self_play": (5, selfplay_handler),
+        'based_agent': (4, partial(BasedAgent)),
+        'constant_agent': (1,partial(ConstantAgent)),
+        #'custom_agent': (3,CustomAgent(file_path='checkpoints/Custom_Experiment_1/rl_model_7228910_steps.zip')),
     }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 
