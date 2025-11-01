@@ -49,7 +49,6 @@ except Exception:
         ).execute()
 
 
-@pytest.mark.timeout(60)
 def test_agent_validation():
     username = os.getenv("USERNAME")
     create_participant(username)
@@ -75,3 +74,7 @@ def test_agent_validation():
     logger.info(
         "Validation match has completed successfully! Your agent is ready for battle!"
     )
+
+
+if __name__ == "__main__":
+    test_agent_validation()

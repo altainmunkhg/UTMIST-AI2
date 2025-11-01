@@ -466,10 +466,12 @@ class SelfPlayHandler(ABC):
             try:
                 opponent = self.agent_partial(file_path=path)
             except FileNotFoundError:
-                # print(f"Warning: Self-play file {path} not found. Defaulting to constant agent.")
+                print(
+                    f"Warning: Self-play file {path} not found. Defaulting to constant agent."
+                )
                 opponent = ConstantAgent()
         else:
-            # print("Warning: No self-play model saved. Defaulting to constant agent.")
+            print("Warning: No self-play model saved. Defaulting to constant agent.")
             opponent = ConstantAgent()
         opponent.get_env_info(self.env)
         return opponent
@@ -554,8 +556,8 @@ class OpponentsCfg:
         )[0]
 
         # If self-play is selected, return the trained model
-        # print(f'Selected {agent_name}')
-        if agent_name == "self_play":
+        print(f"Selected {agent_name}")
+        if agent_name in ["self_play", "self_play_random", "self_play_latest"]:
             selfplay_handler: SelfPlayHandler = self.opponents[agent_name][1]
             return selfplay_handler.get_opponent()
         else:
@@ -1029,20 +1031,19 @@ class RecurrentPPOAgent(Agent):
         if self.file_path is None:
             policy_kwargs = {
                 "activation_fn": nn.ReLU,
-                "lstm_hidden_size": 256,
-                "net_arch": [dict(pi=[128, 128], vf=[128, 128])],
+                "lstm_hidden_size": 512,
+                "net_arch": [dict(pi=[32, 32], vf=[32, 32])],
                 "shared_lstm": True,
                 "enable_critic_lstm": False,
                 "share_features_extractor": True,
-                "log_std_init": -2,
             }
             self.model = RecurrentPPO(
                 "MlpLstmPolicy",
                 self.env,
                 verbose=0,
-                n_steps=30 * 90 * 3,
-                batch_size=32,
-                ent_coef=0.01,
+                n_steps=30 * 90 * 20,
+                batch_size=16,
+                ent_coef=0.05,
                 policy_kwargs=policy_kwargs,
             )
             del self.env

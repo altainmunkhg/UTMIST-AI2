@@ -126,9 +126,6 @@ class RecurrentPPOAgent(Agent):
                 gamma=0.995,
                 learning_rate=3e-4,
                 n_epochs=10,
-                n_steps=90 * 3,
-                batch_size=256,
-                ent_coef=0.001,
                 policy_kwargs=policy_kwargs,
             )
             del self.env
@@ -183,17 +180,16 @@ class BasedAgent(Agent):
             action = self.act_helper.press_keys(["d"])
         elif not opp_KO:
             # Head toward opponent
-            if (opp_pos[0] > pos[0]):
-                action = self.act_helper.press_keys(['d'])
+            if opp_pos[0] > pos[0]:
+                action = self.act_helper.press_keys(["d"])
             else:
-                action = self.act_helper.press_keys(['a'])
+                action = self.act_helper.press_keys(["a"])
 
-            #Head away from opponent 
-            #if (opp_pos[0] > pos[0]) and (pos[0] < 7):
+            # Head away from opponent
+            # if (opp_pos[0] > pos[0]) and (pos[0] < 7):
             #    action = self.act_helper.press_keys(["a"])
-            #elif (opp_pos[0] < pos[0]) and (pos[0] > -7):
+            # elif (opp_pos[0] < pos[0]) and (pos[0] > -7):
             #    action = self.act_helper.press_keys(["d"])
-
 
         # Note: Passing in partial action
         # Jump if below map or opponent is above you
@@ -346,6 +342,12 @@ class MLPExtractor(BaseFeaturesExtractor):
         )
 
 
+def press(action, keys, self):
+    # For pressing keys
+    key_mask = np.array(self.act_helper.press_keys(keys), dtype=action.dtype)
+    return np.maximum(key_mask > 0, action)
+
+
 class CustomAgent(Agent):
     def __init__(self, file_path: Optional[str] = None):
         super().__init__(file_path)
@@ -354,79 +356,118 @@ class CustomAgent(Agent):
         self.skills = {}
         self.active_skill = None
         self.time = 0
+        self.prevpos = [0, 0]
+        self.lstm_states = None
+        self.episode_starts = np.ones((1,), dtype=bool)
 
     def _initialize(self) -> None:
-        #The diffrent AI for each skill
-        skills = {
-            "movement": 'checkpoints/Hierarch_Experiment_2_Movement/rl_model_12142434_steps',
-            "combat": 'checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4005109_steps',
-            "recovery": 'checkpoints/Hierarch_Experiment_2_Movement/rl_model_12142434_steps',
-            "default": 'checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4005109_steps',
-        }
-        
-        #Go through and make sure each skill can be loaded
-        for name, path in skills.items():
-            try:
-                self.skills[name] = RecurrentPPO.load(path)
-                print(f"AI Loaded skill: {name} from {path}")
-            except Exception as e:
-                print(f"AI Could not load {name}: {e}")
+        if self.file_path is None:
+            policy_kwargs = {
+                "activation_fn": nn.ReLU,
+                "lstm_hidden_size": 128,
+                "net_arch": [dict(pi=[64, 64], vf=[64, 64])],
+                "shared_lstm": True,
+                "enable_critic_lstm": False,
+                "share_features_extractor": True,
+            }
+            self.model = RecurrentPPO(
+                "MlpLstmPolicy",
+                self.env,
+                verbose=2,
+                n_steps=30 * 90 * 3,
+                ent_coef=0.005,
+                batch_size=128,
+                policy_kwargs=policy_kwargs,
+            )
+            del self.env
+        else:
+            self.model = RecurrentPPO.load(self.file_path)
 
-        #If no skills loaded, load a default one
-        if not self.skills:
-            print("No skills loaded, using default.")
-            self.skills["default"] = RecurrentPPO.load('checkpoints/Hierarch_Experiment_3.1_Combat/rl_model_4005109_steps')
-
-        self.active_skill = self.skills.get("movement", list(self.skills.values())[0])
+    def reset(self) -> None:
+        self.episode_starts = True
 
     def predict(self, obs):
         self.time += 1
         pos = self.obs_helper.get_section(obs, "player_pos")
+        weapon = self.obs_helper.get_section(obs, "player_weapon_type")
+        player_jumps_left = self.obs_helper.get_section(obs, "player_jumps_left")
         opp_pos = self.obs_helper.get_section(obs, "opponent_pos")
         opp_KO = self.obs_helper.get_section(obs, "opponent_state") in [5, 11]
         action = self.act_helper.zeros()
-        skill_name = "default"
 
-        # If off the edge, come back
-        if (pos[0] < -7 or (pos[0] > -2 and pos[0] < 2) or pos[0] > 7) or (pos[1] > 3.5):
-            #if skill_name != "recovery":
-            #    print("Switching to recovery skill")
-            skill_name = "recovery"
-        elif not opp_KO:
-            # Head toward opponent
-            #if skill_name != "movement":
-            #    print("Switching to movement skill")
-            if opp_pos[0] > pos[0]:
-                skill_name = "movement"
+        # if player_jumps_left == 0 and pos[0] < 2 and pos[0] > -2:
+        #    press(action, ['a'], self)
 
         # Attack if near
-        if (pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 9.0:
-            #if skill_name != "combat":
-            #    print(f"Switching to combat skill")
-            skill_name = "combat"
+        if (
+            ((pos[0] - opp_pos[0]) ** 2 + (pos[1] - opp_pos[1]) ** 2 < 4.0)
+            and not opp_KO
+            and pos[0] > -7
+            and pos[0] < 7
+        ):
 
-        # Switch to the selected skill
-        if skill_name in self.skills:
-            self.lstm_states = None
-            self.episode_starts = np.ones((1,), dtype=bool)
-            self.current_skill = skill_name
-            self.active_skill = self.skills[skill_name]
+            action, self.lstm_states = self.model.predict(
+                obs,
+                state=self.lstm_states,
+                episode_start=self.episode_starts,
+                deterministic=False,
+            )
+            self.episode_starts = np.zeros((1,), dtype=bool)
 
+            # Block "g"
+            g_mask = np.array(self.act_helper.press_keys(["g"]), dtype=action.dtype)
+            action = np.where(g_mask > 0, 0, action)
+
+            # Block "h"
+            if weapon != [0.0]:
+                h_mask = np.array(self.act_helper.press_keys(["h"]), dtype=action.dtype)
+                action = np.where(h_mask > 0, 0, action)
+            else:
+                if self.time % 2 == 0:
+                    action = press(action, ["h"], self)
         else:
-            print(f"Skill '{skill_name}' not loaded, using fallback.")
-            self.active_skill = self.skills["default"]
+            # Pick up weapon
+            if weapon == [0.0] and self.time % 2 == 0:
+                action = press(action, ["h"], self)
 
-        #predict using the active skill
-        action, self.lstm_states = self.active_skill.predict(
-            obs,
-            state=self.lstm_states,
-            episode_start=self.episode_starts,
-            deterministic=True
-        )
+            if pos[0] > 10.67 / 2:
+                action = press(action, ["a"], self)
+            elif pos[0] < -10.67 / 2:
+                action = press(action, ["d"], self)
+            elif not opp_KO and opp_pos[1] < 3:
+                # Head toward opponent
+                if opp_pos[0] > pos[0]:
+                    action = press(action, ["d"], self)
+                else:
+                    action = press(action, ["a"], self)
+            else:
+                action = press(action, ["a"], self)
 
-        self.episode_starts = np.zeros((1,), dtype=bool)
+            # Note: Passing in partial action
+            # Jump if below map or opponent is above you
+            if (pos[1] > 1.6 or pos[1] > opp_pos[1]) and self.time % 2 == 0:
+                action = press(action, ["space"], self)
+
+        if self.episode_starts:
+            self.episode_starts = False
+
+        if pos[0] > 7 or pos[0] < -7 or (pos[0] > -2 and pos[0] < 2):
+            s_mask = np.array(self.act_helper.press_keys(["s"]), dtype=action.dtype)
+            action = np.where(s_mask > 0, 0, action)
+
+        if (pos[0] > -2 and pos[0] < 2) and player_jumps_left == 0:
+            d_mask = np.array(self.act_helper.press_keys(["d"]), dtype=action.dtype)
+            action = np.where(d_mask > 0, 0, action)
+            action = press(action, ["a"], self)
         return action
 
+    def save(self, file_path: str) -> None:
+        self.model.save(file_path)
+
+    def learn(self, env, total_timesteps, log_interval: int = 5, verbose=2):
+        self.model.set_env(env)
+        self.model.verbose = verbose
+        self.model.learn(total_timesteps=total_timesteps, log_interval=log_interval)
 
 
 # --------------------------------------------------------------------------------
@@ -488,14 +529,20 @@ def damage_interaction_reward(
     damage_taken = player.damage_taken_this_frame
     damage_dealt = opponent.damage_taken_this_frame
 
-    if mode == RewardMode.ASYMMETRIC_OFFENSIVE:
+    if player.stocks > opponent.stocks:
         reward = damage_dealt
-    elif mode == RewardMode.SYMMETRIC:
-        reward = damage_dealt - damage_taken
-    elif mode == RewardMode.ASYMMETRIC_DEFENSIVE:
-        reward = -damage_taken
+    elif player.stocks == opponent.stocks:
+        if (
+            abs(player.damage_taken_this_stock - opponent.damage_taken_this_stock)
+            <= 30.0
+        ):
+            reward = damage_dealt - damage_taken
+        elif player.damage_taken_this_stock < opponent.damage_taken_this_stock:
+            reward = damage_dealt
+        else:
+            reward = -damage_taken
     else:
-        raise ValueError(f"Invalid mode: {mode}")
+        reward = -damage_taken
 
     return reward / 140
 
@@ -528,7 +575,7 @@ def danger_zone_reward(
 
 def in_state_reward(
     env: WarehouseBrawl,
-    desired_state: Type[PlayerObjectState] = TauntState,
+    desired_state: Type[PlayerObjectState] = AttackState,
 ) -> float:
     """
     Applies a penalty for every time frame player surpases a certain height threshold in the environment.
@@ -547,7 +594,7 @@ def in_state_reward(
     # Apply penalty if the player is in the danger zone
     reward = 1 if isinstance(player.state, desired_state) else 0.0
 
-    return reward 
+    return reward
 
 
 def head_to_middle_reward(
@@ -568,7 +615,7 @@ def head_to_middle_reward(
     player: Player = env.objects["player"]
 
     # Apply penalty if the player is in the middle
-    if player.body.position.x >2 or player.body.position.x < -2:
+    if player.body.position.x > 2 or player.body.position.x < -2:
         return 1
 
     return 0
@@ -582,11 +629,81 @@ def head_to_opponent(
     player: Player = env.objects["player"]
     opponent: Player = env.objects["opponent"]
 
-    if (abs(player.body.position.x - opponent.body.position.x) < abs(player.prev_x - opponent.prev_x)):
-        reward = 1
+    multiplier = -1 if player.body.position.x > opponent.body.position.x else 1
+    if player.stocks > opponent.stocks:
+        reward = multiplier * (player.body.position.x - player.prev_x)
+    elif player.stocks == opponent.stocks:
+        if (
+            abs(player.damage_taken_this_stock - opponent.damage_taken_this_stock)
+            <= 30.0
+        ):
+            reward = multiplier * (player.body.position.x - player.prev_x)
+        elif player.damage_taken_this_stock < opponent.damage_taken_this_stock:
+            reward = multiplier * (player.body.position.x - player.prev_x)
+        else:
+            if abs(player.body.position.x - opponent.body.position.x) == 0.5:
+                reward = 1.5
+            else:
+                reward = multiplier * (player.body.position.x - player.prev_x)
     else:
-        reward = -1
+        if abs(player.body.position.x - opponent.body.position.x) == 0.5:
+            reward = 2.0
+        else:
+            reward = multiplier * (player.body.position.x - player.prev_x)
 
+    return reward
+
+
+def punish_no_movement_reward(env: WarehouseBrawl) -> float:
+
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+
+    reward = 0
+    if abs(player.body.position.x - opponent.body.position.x) > 1:
+        reward = -1
+    if abs(player.body.velocity.x) < 2:
+        reward = -2
+    else:
+        reward = 0.5
+    return reward
+
+
+def near_opp_defensive_reward(
+    env: WarehouseBrawl,
+) -> float:
+
+    # Get player object from the environment
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+
+    if player.stocks > opponent.stocks:
+        reward = 1.0
+    elif player.stocks == opponent.stocks:
+        if (
+            abs(player.damage_taken_this_stock - opponent.damage_taken_this_stock)
+            <= 30.0
+        ):
+            reward = 0.7
+        elif player.damage_taken_this_stock < opponent.damage_taken_this_stock:
+            reward = 0.7
+        else:
+            reward = 0.5 * (player.body.position.y - opponent.body.position.y)
+    else:
+        reward = 0.5 * (player.body.position.y - opponent.body.position.y)
+    return reward
+
+
+def weapon_holding_behaviour_reward(env: WarehouseBrawl) -> float:
+    player: Player = env.objects["player"]
+    opponent: Player = env.objects["opponent"]
+
+    reward = 0.0
+    if player.weapon != "Punch":
+        if abs(player.body.position.x - opponent.body.position.x) <= 2:
+            reawrd = 2.0
+        else:
+            reward = -1.0
     return reward
 
 
@@ -640,6 +757,7 @@ def on_combo_reward(env: WarehouseBrawl, agent: str) -> float:
     else:
         return 1.0
 
+
 def face_opponent_reward(
     env: WarehouseBrawl,
 ) -> float:
@@ -651,12 +769,19 @@ def face_opponent_reward(
     opponent: Player = env.objects["opponent"]
 
     # Determine if the player is facing the opponent
-    if (player.body.position.x < opponent.body.position.x and player.facing == Facing.RIGHT):
-          return 1
-    elif (player.body.position.x > opponent.body.position.x and player.facing == Facing.LEFT):
-          return 1
+    if (
+        player.body.position.x < opponent.body.position.x
+        and player.facing == Facing.RIGHT
+    ):
+        return 1
+    elif (
+        player.body.position.x > opponent.body.position.x
+        and player.facing == Facing.LEFT
+    ):
+        return 1
 
     return -1
+
 
 def attack_miss_reward(
     env: WarehouseBrawl,
@@ -668,10 +793,11 @@ def attack_miss_reward(
     player: Player = env.objects["player"]
     opponent: Player = env.objects["opponent"]
 
-    if (opponent.damage_taken_this_frame > 0 and isinstance(player.state, AttackState)):
-        return 30
-    return -1/30
-    
+    if opponent.damage_taken_this_frame > 0 and isinstance(player.state, AttackState):
+        return 3
+    return -5
+
+
 def near_edge_penalty(
     env: WarehouseBrawl,
 ) -> float:
@@ -681,9 +807,14 @@ def near_edge_penalty(
     # Get player object from the environment
     player: Player = env.objects["player"]
 
-    if player.body.position.x < -6.5 or (player.body.position.x > -2.5 and player.body.position.x < 2.5) or player.body.position.x > 6.5:
+    if (
+        player.body.position.x < -6.5
+        or (player.body.position.x > -2.5 and player.body.position.x < 2.5)
+        or player.body.position.x > 6.5
+    ):
         return 1
-    return 0
+    return -0.5
+
 
 def speed_reward(
     env: WarehouseBrawl,
@@ -694,33 +825,58 @@ def speed_reward(
     # Get player object from the environment
     player: Player = env.objects["player"]
 
-    speed = player.body.angular_velocity 
+    speed = player.body.angular_velocity
     return speed / 10
+
+
 """
 Add your dictionary of RewardFunctions here using RewTerms
 """
 
+
 def gen_reward_manager():
     reward_functions = {
-        #'target_height_reward': RewTerm(func=base_height_l2, weight=0.0, params={'target_height': -4, 'obj_name': 'player'}),
-        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight = 10),
-        #"damage_interaction_reward": RewTerm(func=damage_interaction_reward, weight=3),
-        #'head_to_middle_reward': RewTerm(func=head_to_middle_reward, weight=-0.1),
-        "head_to_opponent": RewTerm(func=head_to_opponent, weight=10),
-        #"holding_more_than_3_keys": RewTerm(func=holding_more_than_3_keys, weight=-0.05),
-        #'attack_reward': RewTerm(func=in_state_reward, weight= -1, params={'desired_state': AttackState}),
-        #'taunt_reward': RewTerm(func=in_state_reward, weight=-1),
-        #'face_opponent_reward': RewTerm(func=face_opponent_reward, weight=0.05),
-        #"attack_miss_reward": RewTerm(func=attack_miss_reward, weight = 3),
-        "near_edge_penalty": RewTerm(func=near_edge_penalty, weight=-0.1),
-        #"speed_reward": RewTerm(func=speed_reward, weight=0.5),
+        "target_height_reward": RewTerm(
+            func=base_height_l2,
+            weight=1,
+            params={"target_height": -4, "obj_name": "player"},
+        ),
+        "danger_zone_reward": RewTerm(func=danger_zone_reward, weight=15),
+        "damage_interaction_reward": RewTerm(func=damage_interaction_reward, weight=10),
+        "near_opp_defensive_reward": RewTerm(func=near_opp_defensive_reward, weight=3),
+        "weapn_holding_behaviour_reward": RewTerm(
+            func=weapon_holding_behaviour_reward, weight=0.5
+        ),
+        "punish_no_movement_reawrd": RewTerm(func=punish_no_movement_reward, weight=15),
+        "head_to_middle_reward": RewTerm(func=head_to_middle_reward, weight=-0.1),
+        "head_to_opponent": RewTerm(func=head_to_opponent, weight=15),
+        "holding_more_than_3_keys": RewTerm(
+            func=holding_more_than_3_keys, weight=-0.05
+        ),
+        "attack_reward": RewTerm(
+            func=in_state_reward, weight=-1, params={"desired_state": AttackState}
+        ),
+        "taunt_reward": RewTerm(func=in_state_reward, weight=-1),
+        "face_opponent_reward": RewTerm(func=face_opponent_reward, weight=5),
+        "attack_miss_reward": RewTerm(func=attack_miss_reward, weight=10),
+        "near_edge_penalty": RewTerm(func=near_edge_penalty, weight=-5),
+        "speed_reward": RewTerm(func=speed_reward, weight=2),
     }
     signal_subscriptions = {
-        #"on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=50)),
-        "on_knockout_reward": ("knockout_signal",RewTerm(func=on_knockout_reward, weight=25),),
-        #"on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=2)),
-        #"on_equip_reward": ("weapon_equip_signal",RewTerm(func=on_equip_reward, weight=5),),
-        #"on_drop_reward": ("weapon_drop_signal",RewTerm(func=on_drop_reward, weight=10),),
+        "on_win_reward": ("win_signal", RewTerm(func=on_win_reward, weight=50)),
+        "on_knockout_reward": (
+            "knockout_signal",
+            RewTerm(func=on_knockout_reward, weight=25),
+        ),
+        "on_combo_reward": ("hit_during_stun", RewTerm(func=on_combo_reward, weight=1)),
+        "on_equip_reward": (
+            "weapon_equip_signal",
+            RewTerm(func=on_equip_reward, weight=5),
+        ),
+        "on_drop_reward": (
+            "weapon_drop_signal",
+            RewTerm(func=on_drop_reward, weight=10),
+        ),
     }
     return RewardManager(reward_functions, signal_subscriptions)
 
@@ -734,7 +890,9 @@ The main function runs training. You can change configurations such as the Agent
 if __name__ == "__main__":
     # Create agent
     # Start here if you want to train from scratch. e.g:
-    my_agent = RecurrentPPOAgent(file_path='checkpoints/Hierarch_Experiment_2_Movement/rl_model_11640234_steps')
+    my_agent = RecurrentPPOAgent(
+        file_path="checkpoints/Hierarch_Experiment_2_Movement/rl_model_2436530_steps"
+    )
 
     # Start here if you want to train from a specific timestep. e.g:
     # my_agent = RecurrentPPOAgent(file_path="checkpoints/experiment_1/rl_model_324000_steps")
@@ -742,11 +900,8 @@ if __name__ == "__main__":
     # Reward manager
     reward_manager = gen_reward_manager()
 
-    #Self-play settings
-    #selfplay_handler = SelfPlayRandom(
-    #    partial(type(my_agent)),  # Agent class and its keyword arguments
-        # type(my_agent) = Agent class
-    #)
+    # Self-play settings
+    selfplay_handler = SelfPlayRandom(partial(type(my_agent)))
 
     # Set save settings here:
     save_handler = SaveHandler(
@@ -760,9 +915,8 @@ if __name__ == "__main__":
 
     # Set opponent settings here:
     opponent_specification = {
-        #"self_play": (1, selfplay_handler),
-        'based_agent': (9, partial(BasedAgent)),
-
+        "self_play": (1, selfplay_handler),
+        #'based_agent': (9, partial(BasedAgent)),
     }
     opponent_cfg = OpponentsCfg(opponents=opponent_specification)
 
@@ -772,6 +926,6 @@ if __name__ == "__main__":
         save_handler,
         opponent_cfg,
         CameraResolution.LOW,
-        train_timesteps=500_000,
+        train_timesteps=50_000_000,
         train_logging=TrainLogging.PLOT,
     )
