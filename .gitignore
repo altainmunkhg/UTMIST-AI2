@@ -24,7 +24,7 @@ assets.zip
 
 # Videos, zip files, or csv
 *.mp4
-*.zip
+# *.zip
 *.csv# macOS
 .DS_Store
 
