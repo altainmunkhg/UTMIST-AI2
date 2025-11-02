@@ -562,7 +562,7 @@ def holding_more_than_3_keys(
     player: Player = env.objects["player"]
 
     # Apply penalty if the player is holding more than 3 keys
-    a = player.cur_action
+    a = np.array(player.cur_action)
     if (a > 0.5).sum() > 3:
         return env.dt
     return 0
