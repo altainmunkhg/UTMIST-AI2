@@ -141,6 +141,19 @@ class SubmittedAgent(Agent):
         if (pos[0] > -2 and pos[0] < 2) and player_jumps_left == 0:
             action = self._apply_mask(action, ["d"])
             action = self.press(action, ["a"])
+
+        if (abs(opp_pos[0] - pos[0]) < 0.3):
+            action = self.press(action, ['k'])
+            if (pos[0] > 7 or pos[0] < -7 or (pos[0] > -2 and pos[0] < 2)):
+                if ((opp_pos[1] < pos[1])):
+                    action = self.press(action, ['w'])
+                else:
+                    action = self.press(action, ['s'])
+        
+        if pos[1] < -3.5:
+            action = self.press(action, ['k'])
+            action = self.press(action, ['w'])
+
         return action
 
     def save(self, file_path: str) -> None:

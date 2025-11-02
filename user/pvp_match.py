@@ -14,16 +14,12 @@ import pygame
 
 pygame.init()
 
-my_agent = UserInputAgent()
+my_agent = BasedAgent()
 
 steps = 162_000
 
 # Input your file path here in SubmittedAgent if you are loading a model:
-opponent = SubmittedAgent(
-    file_path=os.path.join(
-        os.getcwd(), "checkpoints", "experiment", f"rl_model_{steps}_steps"
-    )
-)
+opponent = SubmittedAgent()
 
 match_time = 99999
 
