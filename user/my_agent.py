@@ -44,6 +44,7 @@ class SubmittedAgent(Agent):
         self.episode_starts = True
 
     def _initialize(self) -> None:
+        self.file_path = self._gdown()
         self.model = RecurrentPPO.load(self.file_path)
 
     def _gdown(self) -> str:
