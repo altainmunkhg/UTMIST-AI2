@@ -13,7 +13,8 @@ assets.zip
 .venv
 .env
 
-/checkpoints/*
+checkpoints/experiment/*
+!checkpoints/experiment/final_model.zip
 
 # jupyter
 .ipynb_checkpoints/
